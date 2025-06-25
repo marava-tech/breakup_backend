@@ -1,0 +1,10 @@
+spring:
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: breakup_stories_test
+
+logging:
+  level:
+    com.breakupstories: DEBUG 

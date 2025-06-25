@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: breakup-stories-api
+  
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: breakup_stories
+      auto-index-creation: true
+  
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:abcd1234abcd1234}
+  expiration: 86400000 # 24 hours in milliseconds
+
+logging:
+  level:
+    com.breakupstories: DEBUG
+    org.springframework.data.mongodb: DEBUG
+    org.springframework.security: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method 
