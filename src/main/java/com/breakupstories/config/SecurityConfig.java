@@ -43,6 +43,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/verify-otp-login").permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**").permitAll()
                         .requestMatchers("/api/stories").permitAll()
+                        .requestMatchers("/api/audits/**").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers("/api/configs/**").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers("/api/users/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session

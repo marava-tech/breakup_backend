@@ -73,4 +73,29 @@ public class DefaultConfigService {
                 .collect(Collectors.toList());
         return PagedResponse.of(configs, page, size, configPage.getTotalElements());
     }
+
+    /**
+     * Get list of languages from the default configuration
+     * @return List of language strings
+     */
+    public List<String> getLanguages() {
+        try {
+            DefaultConfig languagesConfig = defaultConfigRepository.findByKey("languages")
+                    .orElseThrow(() -> new RuntimeException("Languages configuration not found"));
+            
+            if (languagesConfig.getValue() == null || languagesConfig.getValue().trim().isEmpty()) {
+                return List.of();
+            }
+            
+            // Split the value by comma and trim whitespace
+            return List.of(languagesConfig.getValue().split(","))
+                    .stream()
+                    .map(String::trim)
+                    .filter(lang -> !lang.isEmpty())
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            // Return empty list if there's any error
+            return List.of();
+        }
+    }
 } 

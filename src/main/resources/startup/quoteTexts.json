@@ -1,0 +1,14 @@
+[
+  {
+    "key": "quote_text_1",
+    "value": "Sometimes the hardest part isn't letting go but learning to start over.",
+    "description": "Motivational breakup quote 1",
+    "active": true
+  },
+  {
+    "key": "quote_text_2",
+    "value": "Every new beginning comes from some other beginning's end.",
+    "description": "Motivational breakup quote 2",
+    "active": true
+  }
+]

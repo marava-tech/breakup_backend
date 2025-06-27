@@ -1,6 +1,7 @@
 package com.breakupstories.model;
 
 import com.breakupstories.enums.GENDER;
+import com.breakupstories.enums.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,6 +28,10 @@ public class User {
     private GENDER gender;
     private Integer age;
     private String profileImageUrl;
+    private String preferredStoryLanguage;
+    
+    @Builder.Default
+    private Role role = Role.USER;
     
     @CreatedDate
     private LocalDateTime createdAt;

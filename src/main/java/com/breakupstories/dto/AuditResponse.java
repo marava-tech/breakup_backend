@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 
 @Data
@@ -27,8 +26,8 @@ public class AuditResponse {
     private String sessionId;
     private Map<String, Object> metadata;
     
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Long createdAt;
+    private Long updatedAt;
     
     public static AuditResponse fromAudit(Audit audit) {
         return AuditResponse.builder()

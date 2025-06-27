@@ -2,56 +2,67 @@ package com.breakupstories.config;
 
 import com.breakupstories.model.DefaultConfig;
 import com.breakupstories.repository.DefaultConfigRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
+
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class DataInitializationConfig implements CommandLineRunner {
-    
     private final DefaultConfigRepository defaultConfigRepository;
-    
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Override
     public void run(String... args) throws Exception {
-        initializeDefaultProfileImages();
+        initializeDefaultConfigsFromResources();
     }
-    
-    private void initializeDefaultProfileImages() {
-        log.info("Initializing default profile image configurations...");
-        
-        // Default male profile image
-        initializeConfigIfNotExists(
-            "DefaultMaleProfileImageUrl",
-            "https://res.cloudinary.com/dohsebpd1/image/upload/v1750951801/default_male_profile.png",
-            "Default profile image URL for male users"
-        );
-        
-        // Default female profile image
-        initializeConfigIfNotExists(
-            "DefaultFemaleProfileImageUrl",
-            "https://res.cloudinary.com/dohsebpd1/image/upload/v1750951801/default_female_profile.png",
-            "Default profile image URL for female users"
-        );
-        
-        log.info("Default profile image configurations initialized successfully");
+
+    private void initializeDefaultConfigsFromResources() {
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            Resource[] resources = resolver.getResources("classpath:startup/*.json");
+            for (Resource resource : resources) {
+                List<DefaultConfig> configs = parseJsonResource(resource);
+                for (DefaultConfig config : configs) {
+                    if (!defaultConfigRepository.existsByKey(config.getKey())) {
+                        defaultConfigRepository.save(config);
+                        log.info("Inserted default config from {}: {}", resource.getFilename(), config.getKey());
+                    } else {
+                        log.debug("Config already exists: {}", config.getKey());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error initializing default configs from resources", e);
+        }
     }
-    
-    private void initializeConfigIfNotExists(String key, String value, String description) {
-        if (!defaultConfigRepository.existsByKey(key)) {
-            DefaultConfig config = DefaultConfig.builder()
-                    .key(key)
-                    .value(value)
-                    .description(description)
-                    .active(true)
-                    .build();
-            
-            defaultConfigRepository.save(config);
-            log.info("Created default config: {} = {}", key, value);
-        } else {
-            log.debug("Default config already exists: {}", key);
+
+    private List<DefaultConfig> parseJsonResource(Resource resource) {
+        try (InputStream is = resource.getInputStream()) {
+            // Try to parse as array
+            try {
+                return objectMapper.readValue(is, new TypeReference<List<DefaultConfig>>() {});
+            } catch (Exception e) {
+                // If not an array, try as single object
+                try (InputStream is2 = resource.getInputStream()) {
+                    DefaultConfig config = objectMapper.readValue(is2, DefaultConfig.class);
+                    return Collections.singletonList(config);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse {} as DefaultConfig", resource.getFilename(), e);
+            return new ArrayList<>();
         }
     }
 } 

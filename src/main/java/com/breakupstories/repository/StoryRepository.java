@@ -1,6 +1,5 @@
 package com.breakupstories.repository;
 
-import com.breakupstories.enums.LANGUAGE;
 import com.breakupstories.model.Story;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,7 +17,7 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     
     Page<Story> findByStatusOrderByViewCountDesc(Story.StoryStatus status, Pageable pageable);
     
-    Page<Story> findByAudioLanguageAndStatus(LANGUAGE audioLanguage, Story.StoryStatus status, Pageable pageable);
+    Page<Story> findByMetadataLanguageAndStatus(String language, Story.StoryStatus status, Pageable pageable);
     
     List<Story> findByTagsContaining(String tag);
     

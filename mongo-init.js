@@ -31,10 +31,11 @@ db.createCollection('default_configs');
 // Create indexes for better performance
 db.users.createIndex({ "email": 1 }, { unique: true });
 db.users.createIndex({ "createdAt": -1 });
+db.users.createIndex({ "preferredStoryLanguage": 1 });
 
 db.stories.createIndex({ "userId": 1 });
 db.stories.createIndex({ "status": 1 });
-db.stories.createIndex({ "audioLanguage": 1 });
+db.stories.createIndex({ "metadata.language": 1 });
 db.stories.createIndex({ "viewCount": -1 });
 db.stories.createIndex({ "createdAt": -1 });
 
@@ -61,10 +62,21 @@ db.audits.createIndex({ "userId": 1 });
 db.audits.createIndex({ "entityType": 1 });
 db.audits.createIndex({ "entityId": 1 });
 db.audits.createIndex({ "createdAt": -1 });
+db.audits.createIndex({ "userId": 1, "entityType": 1, "actionType": 1 });
+db.audits.createIndex({ "userId": 1, "entityType": 1, "actionType": 1, "createdAt": -1 });
+db.audits.createIndex({ "entityId": 1, "entityType": 1, "actionType": 1 });
+db.audits.createIndex({ "entityId": 1, "entityType": 1, "actionType": 1, "createdAt": -1 });
+db.audits.createIndex({ "entityId": 1, "createdAt": -1 });
 
 db.default_configs.createIndex({ "key": 1 }, { unique: true });
 
 print('MongoDB initialization completed successfully!');
 print('Database: breakup_stories');
 print('User: breakup_user');
-print('Collections and indexes created.'); 
+print('Collections and indexes created.');
+
+print('Updating user role to ADMIN');
+db.users.updateOne(
+    { email: "kinneramadhu123@gmail.com" },
+    { $set: { role: "ADMIN" } }
+); 

@@ -44,7 +44,7 @@ public class TestBypassAuthenticationFilter extends OncePerRequestFilter {
                 UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
                         .username(userResponse.getEmail())
                         .password("") // No password in this setup
-                        .authorities("")
+                        .authorities("ROLE_" + userResponse.getRole().name())
                         .build();
                 
                 // Set authentication in security context

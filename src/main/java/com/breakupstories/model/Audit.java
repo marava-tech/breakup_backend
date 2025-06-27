@@ -9,7 +9,6 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 
 @Data
@@ -34,13 +33,13 @@ public class Audit {
     private Map<String, Object> metadata;
     
     @CreatedDate
-    private LocalDateTime createdAt;
+    private Long createdAt;
     
     @LastModifiedDate
-    private LocalDateTime updatedAt;
+    private Long updatedAt;
     
     public enum EntityType {
-        STORY, COMMENT, LIKE, BOOKMARK, FEEDBACK, USER, AUDIO, VIEW
+        STORY, COMMENT, BOOKMARK, FEEDBACK, USER, AUDIO,  NOTIFICATION
     }
     
     public enum ActionType {
