@@ -78,6 +78,8 @@ public class AuthController {
                 .email(request.getEmail())
                 .gender(request.getGender())
                 .age(request.getAge())
+                .preferredStoryLanguage(request.getPreferredStoryLanguage())
+                .role(request.getRole())
                 .build();
         
         // Create user after OTP verification

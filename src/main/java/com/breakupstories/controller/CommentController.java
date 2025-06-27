@@ -50,7 +50,7 @@ public class CommentController {
         
         // Audit comment creation
         ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
-        auditService.logCommentCreate(userId, response.getId(), request.getStoryId(), 
+        auditService.logCommentCreate(userId, request.getStoryId(),
                                     clientInfo.getUserAgent(), clientInfo.getIpAddress(), 
                                     clientInfo.getSessionId());
         log.info("Audited comment creation for user {} on story {}", userId, request.getStoryId());

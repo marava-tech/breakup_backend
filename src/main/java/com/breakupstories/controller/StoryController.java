@@ -1,17 +1,14 @@
 package com.breakupstories.controller;
 
-import com.breakupstories.dto.CreateStoryRequest;
 import com.breakupstories.dto.LikeResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.StoryResponse;
-import com.breakupstories.enums.LANGUAGE;
 import com.breakupstories.service.AuditService;
 import com.breakupstories.service.ClientInfoService;
 import com.breakupstories.service.StoryService;
 import com.breakupstories.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -101,6 +98,10 @@ public class StoryController {
         } else {
             response = storyService.getStoryById(storyId);
         }
+        
+        // Increment view count for the story
+        storyService.incrementViewCount(storyId);
+        log.info("View count incremented for story: {}", storyId);
         
         // Audit story view
         if (userId != null) {
@@ -196,20 +197,33 @@ public class StoryController {
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
         
-        LANGUAGE lang = LANGUAGE.fromString(language);
-        if (lang == null) {
-            return ResponseEntity.badRequest().build();
-        }
-        
         PagedResponse<StoryResponse> response;
         if (authentication != null && authentication.isAuthenticated()) {
             String email = authentication.getName();
             String userId = userService.getUserEntityByEmail(email).getId();
-            response = storyService.getStoriesByLanguage(lang, userId, page, size);
+            response = storyService.getStoriesByLanguage(language, userId, page, size);
         } else {
-            response = storyService.getStoriesByLanguage(lang, page, size);
+            response = storyService.getStoriesByLanguage(language, page, size);
         }
         
+        return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/preferred-language")
+    @Operation(summary = "Get stories by user's preferred language", description = "Retrieve paginated list of stories in the user's preferred language")
+    public ResponseEntity<PagedResponse<StoryResponse>> getStoriesByPreferredLanguage(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        
+        String email = authentication.getName();
+        String userId = userService.getUserEntityByEmail(email).getId();
+        
+        PagedResponse<StoryResponse> response = storyService.getStoriesByUserPreferredLanguage(userId, page, size);
         return ResponseEntity.ok(response);
     }
 } 

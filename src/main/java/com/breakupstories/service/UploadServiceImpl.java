@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -113,7 +114,7 @@ public class UploadServiceImpl implements UploadService {
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         
         // Set X-App-Key as current date in yyyy-MM-dd format
-        String currentDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String currentDate = LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         headers.set("X-App-Key", currentDate);
         
         log.debug("Created headers with X-App-Key: {}", currentDate);

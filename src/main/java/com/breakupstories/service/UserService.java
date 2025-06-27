@@ -4,6 +4,7 @@ import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.UserRequest;
 import com.breakupstories.dto.UserResponse;
 import com.breakupstories.enums.GENDER;
+import com.breakupstories.enums.Role;
 import com.breakupstories.exception.ResourceAlreadyExistsException;
 import com.breakupstories.exception.ResourceNotFoundException;
 import com.breakupstories.model.User;
@@ -40,7 +41,7 @@ public class UserService implements UserDetailsService {
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail())
                 .password("") // Users don't have passwords in this setup
-                .authorities("ROLE_USER")
+                .authorities("ROLE_" + user.getRole().name())
                 .build();
     }
     
@@ -66,17 +67,22 @@ public class UserService implements UserDetailsService {
         // Get default profile image URL based on gender
         String defaultProfileImageUrl = getDefaultProfileImageUrl(request.getGender());
         
+        // Set default role to USER if not specified
+        Role role = request.getRole() != null ? request.getRole() : Role.USER;
+        
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
                 .gender(request.getGender())
                 .age(request.getAge())
                 .profileImageUrl(defaultProfileImageUrl)
+                .preferredStoryLanguage(request.getPreferredStoryLanguage())
+                .role(role)
                 .build();
         
         User savedUser = userRepository.save(user);
-        log.info("Created user with default profile image: {} -> {}", 
-            request.getEmail(), defaultProfileImageUrl);
+        log.info("Created user with role {} and default profile image: {} -> {}", 
+            role, request.getEmail(), defaultProfileImageUrl);
         
         return UserResponse.fromUser(savedUser);
     }
@@ -109,7 +115,7 @@ public class UserService implements UserDetailsService {
     
     private String getDefaultProfileImageUrl(GENDER gender) {
         try {
-            String configKey = gender == GENDER.MALE ? "DefaultMaleProfileImageUrl" : "DefaultFemaleProfileImageUrl";
+            String configKey = gender == GENDER.MALE ? "profile_male_image_url" : "profile_female_image_url";
             var config = defaultConfigService.getByKey(configKey);
             log.debug("Retrieved default profile image URL for {}: {}", gender, config.getValue());
             return config.getValue();
@@ -153,6 +159,12 @@ public class UserService implements UserDetailsService {
         user.setEmail(request.getEmail());
         user.setGender(request.getGender());
         user.setAge(request.getAge());
+        user.setPreferredStoryLanguage(request.getPreferredStoryLanguage());
+        
+        // Update role if provided
+        if (request.getRole() != null) {
+            user.setRole(request.getRole());
+        }
         
         User updatedUser = userRepository.save(user);
         return UserResponse.fromUser(updatedUser);
@@ -169,5 +181,25 @@ public class UserService implements UserDetailsService {
     public User getUserEntityByEmail(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
+    }
+    
+    public User getUserEntityById(String userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+    }
+    
+    public UserResponse updatePreferredStoryLanguage(String userEmail, String preferredStoryLanguage) {
+        log.info("Updating preferred story language for user: {} -> {}", userEmail, preferredStoryLanguage);
+        
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", userEmail));
+        
+        user.setPreferredStoryLanguage(preferredStoryLanguage);
+        User updatedUser = userRepository.save(user);
+        
+        log.info("Preferred story language updated successfully for user: {} -> {}", 
+            userEmail, preferredStoryLanguage);
+        
+        return UserResponse.fromUser(updatedUser);
     }
 } 

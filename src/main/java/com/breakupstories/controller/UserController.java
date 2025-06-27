@@ -26,7 +26,7 @@ public class UserController {
     private final UserService userService;
     
     @GetMapping
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get all users", description = "Retrieve paginated list of all users")
     public ResponseEntity<PagedResponse<UserResponse>> getUsers(
             @RequestParam(defaultValue = "0") int page,
@@ -79,10 +79,29 @@ public class UserController {
     }
     
     @DeleteMapping("/{userId}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Delete user", description = "Delete a user by their ID")
     public ResponseEntity<Void> deleteUser(@PathVariable String userId) {
         userService.deleteUser(userId);
         return ResponseEntity.noContent().build();
+    }
+    
+    @PutMapping("/preferred-language")
+    @Operation(summary = "Update preferred story language", description = "Update the current user's preferred story language")
+    public ResponseEntity<UserResponse> updatePreferredStoryLanguage(
+            Authentication authentication,
+            @RequestParam String preferredStoryLanguage) {
+        
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.warn("Unauthenticated access attempt to update preferred story language");
+            throw new BadCredentialsException("User not authenticated");
+        }
+        
+        String userEmail = authentication.getName();
+        log.info("Updating preferred story language for authenticated user: {} -> {}", 
+            userEmail, preferredStoryLanguage);
+        
+        UserResponse response = userService.updatePreferredStoryLanguage(userEmail, preferredStoryLanguage);
+        return ResponseEntity.ok(response);
     }
 } 

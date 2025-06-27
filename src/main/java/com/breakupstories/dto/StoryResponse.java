@@ -1,10 +1,9 @@
 package com.breakupstories.dto;
 
-import com.breakupstories.enums.LANGUAGE;
 import com.breakupstories.model.Content;
 import com.breakupstories.model.Emotion;
-import com.breakupstories.model.Keyword;
 import com.breakupstories.model.Story;
+import com.breakupstories.model.StoryMetadata;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,7 +11,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
-
 
 @Data
 @Builder
@@ -24,16 +22,20 @@ public class StoryResponse {
     private String userId;
     private String title;
     private String audioUrl;
+    private String thumbnailUrl;
     private String shareLink;
-    private LANGUAGE audioLanguage;
     private Long viewCount;
     private Long likeCount;
     private Long commentCount;
     private Story.StoryStatus status;
+    private String language;
+    private List<String> rejectionReasons;
+    private Boolean isApproved;
+    private Boolean isPublic;
     private List<Content> contents;
     private List<String> tags;
     private List<Emotion> emotions;
-    private List<Keyword> keywords;
+    private StoryMetadata metadata;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private boolean isLikedByMe = false;
@@ -45,8 +47,9 @@ public class StoryResponse {
                 .userId(story.getUserId())
                 .title(story.getTitle())
                 .audioUrl(story.getAudioUrl())
+                .thumbnailUrl(story.getThumbnailUrl())
                 .shareLink(story.getShareLink())
-                .audioLanguage(story.getAudioLanguage())
+                .language(story.getMetadata() != null ? story.getMetadata().getLanguage() : null)
                 .viewCount(story.getViewCount())
                 .likeCount(likeCount)
                 .commentCount(commentCount)
@@ -54,7 +57,8 @@ public class StoryResponse {
                 .contents(story.getContents())
                 .tags(story.getTags())
                 .emotions(story.getEmotions())
-                .keywords(story.getKeywords())
+                .rejectionReasons(story.getRejectionReasons())
+                .metadata(story.getMetadata())
                 .isLikedByMe(isLikedByMe)
                 .isBookmarkedByMe(false) // Will be set by service layer
                 .createdAt(story.getCreatedAt())
@@ -68,8 +72,9 @@ public class StoryResponse {
                 .userId(story.getUserId())
                 .title(story.getTitle())
                 .audioUrl(story.getAudioUrl())
+                .thumbnailUrl(story.getThumbnailUrl())
                 .shareLink(story.getShareLink())
-                .audioLanguage(story.getAudioLanguage())
+                .language(story.getMetadata() != null ? story.getMetadata().getLanguage() : null)
                 .viewCount(story.getViewCount())
                 .likeCount(likeCount)
                 .commentCount(commentCount)
@@ -77,7 +82,8 @@ public class StoryResponse {
                 .contents(story.getContents())
                 .tags(story.getTags())
                 .emotions(story.getEmotions())
-                .keywords(story.getKeywords())
+                .rejectionReasons(story.getRejectionReasons())
+                .metadata(story.getMetadata())
                 .isLikedByMe(isLikedByMe)
                 .isBookmarkedByMe(isBookmarkedByMe)
                 .createdAt(story.getCreatedAt())
@@ -91,14 +97,16 @@ public class StoryResponse {
                 .userId(story.getUserId())
                 .title(story.getTitle())
                 .audioUrl(story.getAudioUrl())
+                .thumbnailUrl(story.getThumbnailUrl())
                 .shareLink(story.getShareLink())
-                .audioLanguage(story.getAudioLanguage())
+                .language(story.getMetadata() != null ? story.getMetadata().getLanguage() : null)
                 .viewCount(story.getViewCount())
                 .status(story.getStatus())
                 .contents(story.getContents())
                 .tags(story.getTags())
                 .emotions(story.getEmotions())
-                .keywords(story.getKeywords())
+                .rejectionReasons(story.getRejectionReasons())
+                .metadata(story.getMetadata())
                 .createdAt(story.getCreatedAt())
                 .updatedAt(story.getUpdatedAt())
                 .build();

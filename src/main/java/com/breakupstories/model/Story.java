@@ -1,6 +1,5 @@
 package com.breakupstories.model;
 
-import com.breakupstories.enums.LANGUAGE;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,6 +10,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -26,23 +26,26 @@ public class Story {
     private String userId;
     private String title;
     private String audioUrl;
+    private String thumbnailUrl;
     private String shareLink;
-    private LANGUAGE audioLanguage;
     private Long viewCount;
     private StoryStatus status;
     
     private List<Content> contents;
     private List<String> tags;
     private List<Emotion> emotions;
-    private List<Keyword> keywords;
     
     @CreatedDate
     private LocalDateTime createdAt;
     
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    private List<String> rejectionReasons;
+
+    private StoryMetadata metadata;
     
     public enum StoryStatus {
-        PROCESSING, ACTIVE, DISABLED,REJECTED
+        PROCESSING, ACTIVE, REJECTED
     }
 } 

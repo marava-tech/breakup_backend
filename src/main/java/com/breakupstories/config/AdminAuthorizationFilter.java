@@ -41,7 +41,7 @@ public class AdminAuthorizationFilter extends OncePerRequestFilter {
                 UsernamePasswordAuthenticationToken adminAuth = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,
-                        Collections.singletonList(() -> "ADMIN")
+                        Collections.singletonList(() -> "ROLE_ADMIN")
                 );
                 
                 SecurityContextHolder.getContext().setAuthentication(adminAuth);

@@ -1,0 +1,5 @@
+[]
+// update with data soon.
+// key format - language_+gender_+start_rec
+//ex: telugu_male_start_rec , telugu_female_start_rec , english_male_start_rec etc.
+// the objects need to be deserialize and insert to default config
