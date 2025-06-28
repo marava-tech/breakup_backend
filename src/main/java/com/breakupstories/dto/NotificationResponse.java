@@ -19,18 +19,5 @@ public class NotificationResponse {
     private long totalNewComments;
     private Long lastNotificationView;
     private Boolean notify;
-    private List<NotificationItem> notifications;
-    
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class NotificationItem {
-        private String storyId;
-        private String storyTitle;
-        private long likeCount;
-        private long viewCount;
-        private long commentCount;
-        private Long lastActivity;
-    }
+
 } 

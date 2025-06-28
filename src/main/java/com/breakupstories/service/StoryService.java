@@ -156,16 +156,18 @@ public class StoryService {
     }
 
 
-    public PagedResponse<StoryResponse> getForYouStories(String userId,int page, int size) {
+    public PagedResponse<StoryResponse> getForYouStories(String currentUserId,int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByStatusOrderByViewCountDesc(Story.StoryStatus.ACTIVE, pageable);
 
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
                     User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
                     long likeCount = getLikeCount(story.getId());
                     long commentCount = getCommentCount(story.getId());
-                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
                 })
                 .collect(Collectors.toList());
 

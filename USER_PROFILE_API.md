@@ -12,7 +12,9 @@ The profile API provides comprehensive user information including personal detai
 
 Retrieve the authenticated user's profile with statistics.
 
-**Authentication:** Required (JWT Token)
+**Authentication:** Required (JWT Token) - Any authenticated user can access their own profile
+
+**Security Note:** This endpoint is accessible to all authenticated users (ROLE_USER and ROLE_ADMIN), not just administrators.
 
 **Response Format:**
 ```json
