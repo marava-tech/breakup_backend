@@ -339,10 +339,8 @@ public class MockAIService {
     private List<String> mockGenerateAnimatedImages(String detailedStory) {
         // Mock animated image URLs (skip for now as mentioned in comments)
         return Arrays.asList(
-                "https://res.cloudinary.com/dohsebpd1/image/upload/v1750951801/animated_rain_scene.gif",
-                "https://res.cloudinary.com/dohsebpd1/image/upload/v1750951801/animated_oak_tree.gif",
-                "https://res.cloudinary.com/dohsebpd1/image/upload/v1750951801/animated_hearts.gif",
-                "https://res.cloudinary.com/dohsebpd1/image/upload/v1750951801/animated_memories.gif"
+                "https://res.cloudinary.com/dohsebpd1/image/upload/v1750703937/breakup-project/itv6xld5k1j1qa3daqoh.png",
+                "https://res.cloudinary.com/dohsebpd1/image/upload/v1750703937/breakup-project/itv6xld5k1j1qa3daqoh.png"
         );
     }
 
@@ -589,7 +587,7 @@ public class MockAIService {
         existingMetadata.setLocations(metadata.getLocations());
         existingMetadata.setPincodes(metadata.getPincodes());
         existingMetadata.setState(metadata.getState());
-        existingMetadata.setLanguage(metadata.getLanguage());
+        existingMetadata.setLanguage(metadata.getLanguage().toLowerCase());
         existingMetadata.setDeviceInfo(metadata.getDeviceInfo());
         story.setMetadata(existingMetadata);
 

@@ -4,6 +4,7 @@ import com.breakupstories.dto.CommentRequest;
 import com.breakupstories.dto.CommentResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.model.Comment;
+import com.breakupstories.model.User;
 import com.breakupstories.repository.CommentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 public class CommentService {
     
     private final CommentRepository commentRepository;
+    private final UserService userService;
     
     public CommentResponse createComment(String userId, CommentRequest request) {
         log.info("User {} creating comment on story {}", userId, request.getStoryId());
@@ -31,13 +33,16 @@ public class CommentService {
                 .storyId(request.getStoryId())
                 .userId(userId)
                 .text(request.getText())
+                .active(true)
                 .parentId(request.getParentId())
                 .build();
         
         Comment savedComment = commentRepository.save(comment);
         log.info("Comment created with ID: {}", savedComment.getId());
         
-        return CommentResponse.fromComment(savedComment);
+        // Fetch user information to include username
+        User user = userService.getUserEntityById(userId);
+        return CommentResponse.fromComment(savedComment, user);
     }
     
     /**
@@ -82,7 +87,9 @@ public class CommentService {
      * @return CommentResponse with nested replies
      */
     private CommentResponse buildCommentWithReplies(Comment comment) {
-        CommentResponse response = CommentResponse.fromComment(comment);
+        // Fetch user information to include username
+        User user = userService.getUserEntityById(comment.getUserId());
+        CommentResponse response = CommentResponse.fromComment(comment, user);
         
         // Get all replies for this comment (active only)
         List<Comment> replies = commentRepository.findByParentIdAndActiveTrue(comment.getId());
@@ -111,7 +118,10 @@ public class CommentService {
         
         List<CommentResponse> comments = commentPage.getContent().stream()
                 .filter(Comment::isActive) // Filter out inactive comments
-                .map(CommentResponse::fromComment)
+                .map(comment -> {
+                    User user = userService.getUserEntityById(comment.getUserId());
+                    return CommentResponse.fromComment(comment, user);
+                })
                 .collect(Collectors.toList());
         
         return PagedResponse.of(comments, page, size, commentPage.getTotalElements());
@@ -122,7 +132,10 @@ public class CommentService {
         Page<Comment> commentPage = commentRepository.findByUserIdAndActiveTrue(userId, pageable);
         
         List<CommentResponse> comments = commentPage.getContent().stream()
-                .map(CommentResponse::fromComment)
+                .map(comment -> {
+                    User user = userService.getUserEntityById(comment.getUserId());
+                    return CommentResponse.fromComment(comment, user);
+                })
                 .collect(Collectors.toList());
         
         return PagedResponse.of(comments, page, size, commentPage.getTotalElements());
@@ -131,7 +144,10 @@ public class CommentService {
     public List<CommentResponse> getRepliesByComment(String commentId) {
         List<Comment> replies = commentRepository.findByParentIdAndActiveTrue(commentId);
         return replies.stream()
-                .map(CommentResponse::fromComment)
+                .map(comment -> {
+                    User user = userService.getUserEntityById(comment.getUserId());
+                    return CommentResponse.fromComment(comment, user);
+                })
                 .collect(Collectors.toList());
     }
     
@@ -158,7 +174,9 @@ public class CommentService {
         Comment updatedComment = commentRepository.save(comment);
         log.info("Comment {} updated successfully", commentId);
         
-        return CommentResponse.fromComment(updatedComment);
+        // Fetch user information to include username
+        User user = userService.getUserEntityById(userId);
+        return CommentResponse.fromComment(updatedComment, user);
     }
     
     public void deleteComment(String commentId, String userId) {

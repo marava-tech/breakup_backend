@@ -18,6 +18,7 @@ public class NotificationResponse {
     private long totalNewViews;
     private long totalNewComments;
     private Long lastNotificationView;
+    private Boolean notify;
     private List<NotificationItem> notifications;
     
     @Data

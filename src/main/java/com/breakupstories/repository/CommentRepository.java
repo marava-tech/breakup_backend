@@ -4,6 +4,7 @@ import com.breakupstories.model.Comment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -43,4 +44,8 @@ public interface CommentRepository extends MongoRepository<Comment, String> {
     long countByStoryIdAndActiveTrue(String storyId);
     
     Page<Comment> findByUserIdAndActiveTrue(String userId, Pageable pageable);
+    
+    // Count comments for all stories by a user
+    @Query("{'storyId': { $in: ?0 }}")
+    long countByStoryUserId(String userId);
 } 

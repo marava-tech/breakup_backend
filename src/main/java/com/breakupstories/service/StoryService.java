@@ -6,7 +6,6 @@ import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.StoryResponse;
 import com.breakupstories.dto.CommentRequest;
 import com.breakupstories.dto.CommentResponse;
-import com.breakupstories.dto.StoryFilterRequest;
 import com.breakupstories.model.Story;
 import com.breakupstories.model.StoryMetadata;
 import com.breakupstories.model.User;
@@ -102,7 +101,7 @@ public class StoryService {
                     User user = userService.getUserEntityById(story.getUserId());
                     long likeCount = getLikeCount(story.getId());
                     long commentCount = getCommentCount(story.getId());
-                    return StoryResponse.fromStory(story, user, false, likeCount, commentCount);
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
                 })
                 .collect(Collectors.toList());
         
@@ -110,7 +109,7 @@ public class StoryService {
     }
     
     /**
-     * Get trending stories sorted by view count
+     * Get trending stories sorted by view count (for unauthenticated users)
      * @param page Page number
      * @param size Page size
      * @return PagedResponse of trending stories
@@ -124,7 +123,7 @@ public class StoryService {
                     User user = userService.getUserEntityById(story.getUserId());
                     long likeCount = getLikeCount(story.getId());
                     long commentCount = getCommentCount(story.getId());
-                    return StoryResponse.fromStory(story, user, false, likeCount, commentCount);
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
                 })
                 .collect(Collectors.toList());
         
@@ -132,7 +131,7 @@ public class StoryService {
     }
     
     /**
-     * Get trending stories with user context (includes likedByMe status)
+     * Get trending stories sorted by view count (for authenticated users)
      * @param currentUserId The current user ID
      * @param page Page number
      * @param size Page size
@@ -155,7 +154,71 @@ public class StoryService {
         
         return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
     }
-    
+
+
+    public PagedResponse<StoryResponse> getForYouStories(String userId,int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByStatusOrderByViewCountDesc(Story.StoryStatus.ACTIVE, pageable);
+
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+
+
+    /**
+     * Get trending stories with user context (includes likedByMe status)
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of trending stories with user context
+     */
+    public PagedResponse<StoryResponse> getNearbyStories(String currentUserId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByStatusOrderByViewCountDesc(Story.StoryStatus.ACTIVE, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+
+
+    //take story id
+    public PagedResponse<StoryResponse> getSimilarStories(String currentUserId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByStatusOrderByViewCountDesc(Story.StoryStatus.ACTIVE, pageable);
+
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+
+
     /**
      * Get stories with user context (includes likedByMe status)
      * @param currentUserId The current user ID
@@ -182,28 +245,7 @@ public class StoryService {
         return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
     }
     
-    /**
-     * Get stories by language
-     * @param language The language to filter by
-     * @param page Page number
-     * @param size Page size
-     * @return PagedResponse of stories in the specified language
-     */
-    public PagedResponse<StoryResponse> getStoriesByLanguage(String language, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByMetadataLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
-        
-        List<StoryResponse> stories = storyPage.getContent().stream()
-                .map(story -> {
-                    User user = userService.getUserEntityById(story.getUserId());
-                    long likeCount = getLikeCount(story.getId());
-                    long commentCount = getCommentCount(story.getId());
-                    return StoryResponse.fromStory(story, user, false, likeCount, commentCount);
-                })
-                .collect(Collectors.toList());
-        
-        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
-    }
+
     
     /**
      * Get stories by language with user context (includes likedByMe status)
@@ -225,6 +267,29 @@ public class StoryService {
                     long likeCount = getLikeCount(story.getId());
                     long commentCount = getCommentCount(story.getId());
                     return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get stories by language (for unauthenticated users)
+     * @param language The language to filter by
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of stories in the specified language
+     */
+    public PagedResponse<StoryResponse> getStoriesByLanguage(String language, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByMetadataLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
                 })
                 .collect(Collectors.toList());
         
@@ -377,70 +442,7 @@ public class StoryService {
     public long getCommentCount(String storyId) {
         return commentService.getCommentCount(storyId);
     }
-    
-    /**
-     * Add a comment to a story
-     * @param userId The user ID who is commenting
-     * @param storyId The story ID to comment on
-     * @param text The comment text
-     * @param parentId Optional parent comment ID for replies
-     * @return CommentResponse with comment details
-     */
-    public CommentResponse addComment(String userId, String storyId, String text, String parentId) {
-        log.info("User {} attempting to add comment to story {}", userId, storyId);
-        
-        // Check if story exists and is active
-        Story story = storyRepository.findById(storyId)
-                .orElseThrow(() -> new RuntimeException("Story not found with ID: " + storyId));
-        
-        if (story.getStatus() != Story.StoryStatus.ACTIVE) {
-            throw new RuntimeException("Cannot comment on a story that is not active");
-        }
-        
-        CommentRequest request = CommentRequest.builder()
-                .storyId(storyId)
-                .text(text)
-                .parentId(parentId)
-                .build();
-        
-        CommentResponse commentResponse = commentService.createComment(userId, request);
-        
-        log.info("User {} successfully added comment to story {}", userId, storyId);
-        return commentResponse;
-    }
-    
-    /**
-     * Update a comment
-     * @param userId The user ID who owns the comment
-     * @param commentId The comment ID to update
-     * @param text The new comment text
-     * @return Updated CommentResponse
-     */
-    public CommentResponse updateComment(String userId, String commentId, String text) {
-        log.info("User {} attempting to update comment {}", userId, commentId);
-        
-        CommentRequest request = CommentRequest.builder()
-                .text(text)
-                .build();
-        
-        CommentResponse commentResponse = commentService.updateComment(commentId, userId, request);
-        
-        log.info("User {} successfully updated comment {}", userId, commentId);
-        return commentResponse;
-    }
-    
-    /**
-     * Delete a comment
-     * @param userId The user ID who owns the comment
-     * @param commentId The comment ID to delete
-     */
-    public void deleteComment(String userId, String commentId) {
-        log.info("User {} attempting to delete comment {}", userId, commentId);
-        
-        commentService.deleteComment(commentId, userId);
-        
-        log.info("User {} successfully deleted comment {}", userId, commentId);
-    }
+
     
     public void incrementViewCount(String storyId) {
         Story story = storyRepository.findById(storyId)
@@ -478,34 +480,39 @@ public class StoryService {
     }
     
     /**
-     * Search and filter stories with multiple criteria
-     * @param filterRequest The filter request containing search criteria
-     * @return PagedResponse of filtered stories
+     * Get latest stories sorted by creation date (newest first)
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of latest stories with user context
      */
-    public PagedResponse<StoryResponse> searchStories(StoryFilterRequest filterRequest) {
-        // Validate the filter request
-        filterRequest.validate();
-        
-        // Set default pagination if not provided
-        int page = filterRequest.getPage() != null ? filterRequest.getPage() : 0;
-        int size = filterRequest.getSize() != null ? filterRequest.getSize() : 10;
-        
+    public PagedResponse<StoryResponse> getLatestStories(String currentUserId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage;
+        Page<Story> storyPage = storyRepository.findByStatusOrderByCreatedAtDesc(Story.StoryStatus.ACTIVE, pageable);
         
-        if (filterRequest.hasFilters()) {
-            // Use the custom query with filters
-            storyPage = storyRepository.findStoriesWithFilters(
-                filterRequest.getLanguage(),
-                filterRequest.getTitleContains(),
-                filterRequest.getCreatedAtStart(),
-                filterRequest.getCreatedAtEnd(),
-                pageable
-            );
-        } else {
-            // No filters applied, return all active stories
-            storyPage = storyRepository.findByStatus(Story.StoryStatus.ACTIVE, pageable);
-        }
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get latest stories sorted by creation date (newest first) - for unauthenticated users
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of latest stories
+     */
+    public PagedResponse<StoryResponse> getLatestStories(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByStatusOrderByCreatedAtDesc(Story.StoryStatus.ACTIVE, pageable);
         
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -520,35 +527,16 @@ public class StoryService {
     }
     
     /**
-     * Search and filter stories with user context (includes likedByMe and bookmarkedByMe status)
-     * @param filterRequest The filter request containing search criteria
+     * Search stories by title contains (case-insensitive)
+     * @param titleContains Text to search in story titles
      * @param currentUserId The current user ID
-     * @return PagedResponse of filtered stories with user context
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of stories with matching titles
      */
-    public PagedResponse<StoryResponse> searchStoriesWithUserContext(StoryFilterRequest filterRequest, String currentUserId) {
-        // Validate the filter request
-        filterRequest.validate();
-        
-        // Set default pagination if not provided
-        int page = filterRequest.getPage() != null ? filterRequest.getPage() : 0;
-        int size = filterRequest.getSize() != null ? filterRequest.getSize() : 10;
-        
+    public PagedResponse<StoryResponse> searchStoriesByTitle(String titleContains, String currentUserId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage;
-        
-        if (filterRequest.hasFilters()) {
-            // Use the custom query with filters
-            storyPage = storyRepository.findStoriesWithFilters(
-                filterRequest.getLanguage(),
-                filterRequest.getTitleContains(),
-                filterRequest.getCreatedAtStart(),
-                filterRequest.getCreatedAtEnd(),
-                pageable
-            );
-        } else {
-            // No filters applied, return all active stories
-            storyPage = storyRepository.findByStatus(Story.StoryStatus.ACTIVE, pageable);
-        }
+        Page<Story> storyPage = storyRepository.findByTitleContaining(titleContains, pageable);
         
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -558,6 +546,29 @@ public class StoryService {
                     long likeCount = getLikeCount(story.getId());
                     long commentCount = getCommentCount(story.getId());
                     return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Search stories by title contains (case-insensitive) - for unauthenticated users
+     * @param titleContains Text to search in story titles
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of stories with matching titles
+     */
+    public PagedResponse<StoryResponse> searchStoriesByTitle(String titleContains, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByTitleContaining(titleContains, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
                 })
                 .collect(Collectors.toList());
         

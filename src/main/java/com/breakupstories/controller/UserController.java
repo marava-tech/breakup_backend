@@ -3,6 +3,7 @@ package com.breakupstories.controller;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.UserRequest;
 import com.breakupstories.dto.UserResponse;
+import com.breakupstories.dto.UserProfileResponse;
 import com.breakupstories.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -104,4 +105,20 @@ public class UserController {
         UserResponse response = userService.updatePreferredStoryLanguage(userEmail, preferredStoryLanguage);
         return ResponseEntity.ok(response);
     }
+    
+    @GetMapping("/profile")
+    @Operation(summary = "Get user profile", description = "Retrieve user profile with statistics")
+    public ResponseEntity<UserProfileResponse> getUserProfile(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.warn("Unauthenticated access attempt to get user profile");
+            throw new BadCredentialsException("User not authenticated");
+        }
+        
+        String userEmail = authentication.getName();
+        log.info("Retrieving profile for authenticated user: {}", userEmail);
+        
+        UserProfileResponse response = userService.getUserProfile(userEmail);
+        return ResponseEntity.ok(response);
+    }
+    
 } 

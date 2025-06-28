@@ -40,8 +40,8 @@ public class StoryResponse {
     private StoryMetadata metadata;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private boolean isLikedByMe = false;
-    private boolean isBookmarkedByMe = false;
+    private boolean isLikedByMe ;
+    private boolean isBookmarkedByMe ;
 
     public static StoryResponse fromStory(Story story, User user, boolean isLikedByMe, long likeCount, long commentCount) {
         return StoryResponse.builder()
