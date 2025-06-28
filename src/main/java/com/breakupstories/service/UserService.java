@@ -3,12 +3,16 @@ package com.breakupstories.service;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.UserRequest;
 import com.breakupstories.dto.UserResponse;
+import com.breakupstories.dto.UserProfileResponse;
 import com.breakupstories.enums.GENDER;
 import com.breakupstories.enums.Role;
 import com.breakupstories.exception.ResourceAlreadyExistsException;
 import com.breakupstories.exception.ResourceNotFoundException;
 import com.breakupstories.model.User;
 import com.breakupstories.repository.UserRepository;
+import com.breakupstories.repository.StoryRepository;
+import com.breakupstories.repository.LikeRepository;
+import com.breakupstories.repository.CommentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -32,6 +36,9 @@ public class UserService implements UserDetailsService {
     private final OTPService otpService;
     private final DefaultConfigService defaultConfigService;
     private final UploadService uploadService;
+    private final StoryRepository storyRepository;
+    private final LikeRepository likeRepository;
+    private final CommentRepository commentRepository;
     
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
@@ -201,5 +208,53 @@ public class UserService implements UserDetailsService {
             userEmail, preferredStoryLanguage);
         
         return UserResponse.fromUser(updatedUser);
+    }
+    
+    public UserProfileResponse getUserProfileWithStatistics(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        
+        // Calculate statistics
+        Long totalStories = storyRepository.countByUserIdAndStatus(userId, com.breakupstories.model.Story.StoryStatus.ACTIVE);
+        
+        // Get all story IDs for this user to calculate likes and comments
+        List<String> userStoryIds = storyRepository.findByUserIdAndStatus(userId, com.breakupstories.model.Story.StoryStatus.ACTIVE)
+                .stream()
+                .map(story -> story.getId())
+                .collect(Collectors.toList());
+        
+        Long totalLikes = 0L;
+        Long totalComments = 0L;
+        Long totalViews = 0L;
+        
+        if (!userStoryIds.isEmpty()) {
+            // Calculate total likes for all user's stories
+            totalLikes = userStoryIds.stream()
+                    .mapToLong(storyId -> likeRepository.countByStoryId(storyId))
+                    .sum();
+            
+            // Calculate total comments for all user's stories
+            totalComments = userStoryIds.stream()
+                    .mapToLong(storyId -> commentRepository.countByStoryIdAndActiveTrue(storyId))
+                    .sum();
+            
+            // Calculate total views for all user's stories
+            totalViews = storyRepository.findByUserIdAndStatus(userId, com.breakupstories.model.Story.StoryStatus.ACTIVE)
+                    .stream()
+                    .mapToLong(story -> story.getViewCount() != null ? story.getViewCount() : 0L)
+                    .sum();
+        }
+        
+        log.info("User profile statistics for {}: stories={}, likes={}, views={}, comments={}", 
+            userId, totalStories, totalLikes, totalViews, totalComments);
+        
+        return UserProfileResponse.fromUser(user, totalStories, totalLikes, totalViews, totalComments);
+    }
+    
+    public UserProfileResponse getUserProfile(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", userEmail));
+        
+        return getUserProfileWithStatistics(user.getId());
     }
 } 

@@ -1,6 +1,7 @@
 package com.breakupstories.dto;
 
 import com.breakupstories.model.Comment;
+import com.breakupstories.model.User;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,7 @@ public class CommentResponse {
     private String id;
     private String storyId;
     private String userId;
+    private String username;
     private String text;
     private String parentId;
     private List<CommentResponse> replies;
@@ -28,6 +30,19 @@ public class CommentResponse {
                 .id(comment.getId())
                 .storyId(comment.getStoryId())
                 .userId(comment.getUserId())
+                .text(comment.getText())
+                .parentId(comment.getParentId())
+                .createdAt(comment.getCreatedAt())
+                .updatedAt(comment.getUpdatedAt())
+                .build();
+    }
+    
+    public static CommentResponse fromComment(Comment comment, User user) {
+        return CommentResponse.builder()
+                .id(comment.getId())
+                .storyId(comment.getStoryId())
+                .userId(comment.getUserId())
+                .username(user != null ? user.getName() : null)
                 .text(comment.getText())
                 .parentId(comment.getParentId())
                 .createdAt(comment.getCreatedAt())

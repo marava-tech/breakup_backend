@@ -63,6 +63,7 @@ public class NotificationService {
                 .totalNewLikes(newLikesCount)
                 .totalNewViews(newViewsCount)
                 .totalNewComments(newCommentsCount)
+                .notify(newLikesCount>0 || newViewsCount>0 || newCommentsCount>0)
                 .lastNotificationView(lastNotificationView) // Keep epoch timestamp for audit consistency
                 .notifications(notifications)
                 .build();

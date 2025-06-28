@@ -1,13 +1,13 @@
 [
   {
     "key": "profile_male_image_url",
-    "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1750951801/default_male_profile.png",
+    "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1750703839/breakup-project/vclt5frzazb2w8ed6ed0.png",
     "description": "Default profile image URL for male users",
     "active": true
   },
   {
     "key": "profile_female_image_url",
-    "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1750951801/default_female_profile.png",
+    "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1750703845/breakup-project/tprvjmh1blg6sudcc7k6.png",
     "description": "Default profile image URL for female users",
     "active": true
   },

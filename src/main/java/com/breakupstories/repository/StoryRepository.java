@@ -19,6 +19,8 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     
     Page<Story> findByStatusOrderByViewCountDesc(Story.StoryStatus status, Pageable pageable);
     
+    Page<Story> findByStatusOrderByCreatedAtDesc(Story.StoryStatus status, Pageable pageable);
+    
     Page<Story> findByMetadataLanguageAndStatus(String language, Story.StoryStatus status, Pageable pageable);
     
     List<Story> findByTagsContaining(String tag);
@@ -48,4 +50,14 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     // Query for filtering by date range
     @Query("{'status': 'ACTIVE', 'createdAt': { $gte: ?0, $lte: ?1 }}")
     Page<Story> findByCreatedAtBetween(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+    
+    // Count stories by user ID and status
+    long countByUserIdAndStatus(String userId, Story.StoryStatus status);
+    
+    // Find stories by user ID and status
+    List<Story> findByUserIdAndStatus(String userId, Story.StoryStatus status);
+    
+    // Sum view count by user ID
+    @Query("{'userId': ?0}")
+    Long sumViewCountByUserId(String userId);
 } 
