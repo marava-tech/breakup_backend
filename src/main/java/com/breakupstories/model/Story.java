@@ -27,7 +27,6 @@ public class Story {
     private String title;
     private String audioUrl;
     private String thumbnailUrl;
-    private String shareLink;
     private Long viewCount;
     private StoryStatus status;
     

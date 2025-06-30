@@ -24,7 +24,6 @@ public class AuditService {
     
     private final AuditRepository auditRepository;
     private final StoryRepository storyRepository;
-    private final LikeService likeService;
     
     public AuditResponse createAudit(AuditRequest request) {
         Audit audit = Audit.builder()
@@ -65,6 +64,23 @@ public class AuditService {
     // Convenience methods for common interactions
     public void logStoryView(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
         Map<String, Object> metadata = Map.of("interaction_type", "story_view");
+        logAudit(userId, Audit.EntityType.STORY, Audit.ActionType.VIEW, storyId, userAgent, ipAddress, sessionId, metadata);
+    }
+    
+    /**
+     * Log story view with additional metadata about whether it's the user's own story
+     * @param userId The user ID
+     * @param storyId The story ID
+     * @param userAgent The user agent
+     * @param ipAddress The IP address
+     * @param sessionId The session ID
+     * @param isOwnStory Whether the user is viewing their own story
+     */
+    public void logStoryView(String userId, String storyId, String userAgent, String ipAddress, String sessionId, boolean isOwnStory) {
+        Map<String, Object> metadata = Map.of(
+            "interaction_type", "story_view",
+            "is_own_story", isOwnStory
+        );
         logAudit(userId, Audit.EntityType.STORY, Audit.ActionType.VIEW, storyId, userAgent, ipAddress, sessionId, metadata);
     }
     
@@ -336,9 +352,11 @@ public class AuditService {
     
     /**
      * Get total views count for stories owned by the current user
+     * Excludes views where the viewer is the same as the story owner
+     * Excludes views that are within 1-minute cooldown period
      * @param userId The user ID
      * @param since Optional timestamp to count views since
-     * @return Total views count for user's stories
+     * @return Total views count for user's stories (excluding self-views and cooldown views)
      */
     public long getViewsCountForUserStories(String userId, Long since) {
         List<String> userStoryIds = getUserStoryIds(userId);
@@ -346,12 +364,63 @@ public class AuditService {
             return 0;
         }
         
+        // Get all view audits for user's stories
+        List<Audit> viewAudits;
         if (since == null) {
-            return auditRepository.countByEntityIdInAndEntityTypeAndActionType(
+            viewAudits = auditRepository.findByEntityIdInAndEntityTypeAndActionType(
                     userStoryIds, Audit.EntityType.STORY, Audit.ActionType.VIEW);
+        } else {
+            viewAudits = auditRepository.findByEntityIdInAndEntityTypeAndActionTypeAndCreatedAtAfter(
+                    userStoryIds, Audit.EntityType.STORY, Audit.ActionType.VIEW, since);
         }
-        return auditRepository.countByEntityIdInAndEntityTypeAndActionTypeAndCreatedAtAfter(
-                userStoryIds, Audit.EntityType.STORY, Audit.ActionType.VIEW, since);
+        
+        // Filter out self-views and cooldown views
+        long validViewCount = viewAudits.stream()
+                .filter(audit -> {
+                    String viewerId = audit.getUserId();
+                    String storyId = audit.getEntityId();
+                    
+                    // Get the story to check if viewer is the owner
+                    try {
+                        Story story = storyRepository.findById(storyId).orElse(null);
+                        if (story != null) {
+                            // Exclude self-views
+                            if (viewerId.equals(story.getUserId())) {
+                                return false;
+                            }
+                            
+                            // Check for cooldown views (1 minute)
+                            long oneMinuteAgo = System.currentTimeMillis() - (1 * 60 * 1000);
+                            if (audit.getCreatedAt() != null && audit.getCreatedAt() < oneMinuteAgo) {
+                                // Check if there's a more recent view by the same user/IP
+                                List<Audit> recentViews;
+                                if (viewerId.contains(".")) {
+                                    // IP address (unauthenticated user)
+                                    recentViews = auditRepository.findByIpAddressAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+                                            viewerId, storyId, Audit.EntityType.STORY, Audit.ActionType.VIEW, oneMinuteAgo);
+                                } else {
+                                    // User ID (authenticated user)
+                                    recentViews = auditRepository.findByUserIdAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+                                            viewerId, storyId, Audit.EntityType.STORY, Audit.ActionType.VIEW, oneMinuteAgo);
+                                }
+                                
+                                // If there's a more recent view, exclude this one (cooldown)
+                                if (!recentViews.isEmpty()) {
+                                    return false;
+                                }
+                            }
+                            
+                            return true;
+                        }
+                    } catch (Exception e) {
+                        // If there's an error getting the story, exclude the view to be safe
+                        return false;
+                    }
+                    return false;
+                })
+                .count();
+        
+        return validViewCount;
     }
     
     /**
@@ -451,17 +520,66 @@ public class AuditService {
     
     /**
      * Get views count for a specific story
+     * Excludes views where the viewer is the same as the story owner
+     * Excludes views that are within 1-minute cooldown period
      * @param storyId The story ID
      * @param since Optional timestamp to count views since
-     * @return Views count for the story
+     * @return Views count for the story (excluding self-views and cooldown views)
      */
     private long getViewsCountForStory(String storyId, Long since) {
+        List<Audit> viewAudits;
         if (since == null) {
-            return auditRepository.countByEntityIdAndEntityTypeAndActionType(
+            viewAudits = auditRepository.findByEntityIdAndEntityTypeAndActionType(
                     storyId, Audit.EntityType.STORY, Audit.ActionType.VIEW);
+        } else {
+            viewAudits = auditRepository.findByEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+                    storyId, Audit.EntityType.STORY, Audit.ActionType.VIEW, since);
         }
-        return auditRepository.countByEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
-                storyId, Audit.EntityType.STORY, Audit.ActionType.VIEW, since);
+        
+        // Get the story to check ownership
+        Story story = storyRepository.findById(storyId).orElse(null);
+        if (story == null) {
+            return 0;
+        }
+        
+        String storyOwnerId = story.getUserId();
+        
+        // Filter out self-views and cooldown views
+        long validViewCount = viewAudits.stream()
+                .filter(audit -> {
+                    String viewerId = audit.getUserId();
+                    
+                    // Exclude self-views
+                    if (viewerId.equals(storyOwnerId)) {
+                        return false;
+                    }
+                    
+                    // Check for cooldown views (1 minute)
+                    long oneMinuteAgo = System.currentTimeMillis() - (1 * 60 * 1000);
+                    if (audit.getCreatedAt() != null && audit.getCreatedAt() < oneMinuteAgo) {
+                        // Check if there's a more recent view by the same user/IP
+                        List<Audit> recentViews;
+                        if (viewerId.contains(".")) {
+                            // IP address (unauthenticated user)
+                            recentViews = auditRepository.findByIpAddressAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+                                    viewerId, storyId, Audit.EntityType.STORY, Audit.ActionType.VIEW, oneMinuteAgo);
+                        } else {
+                            // User ID (authenticated user)
+                            recentViews = auditRepository.findByUserIdAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+                                    viewerId, storyId, Audit.EntityType.STORY, Audit.ActionType.VIEW, oneMinuteAgo);
+                        }
+                        
+                        // If there's a more recent view, exclude this one (cooldown)
+                        if (!recentViews.isEmpty()) {
+                            return false;
+                        }
+                    }
+                    
+                    return true;
+                })
+                .count();
+        
+        return validViewCount;
     }
     
     /**
@@ -477,5 +595,80 @@ public class AuditService {
         }
         return auditRepository.countByEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
                 storyId, Audit.EntityType.COMMENT, Audit.ActionType.CREATE, since);
+    }
+    
+    /**
+     * Get story matches for a user since a given date
+     * @param userId The user ID
+     * @param since Optional timestamp to get matches since
+     * @return List of audit records for story matches
+     */
+    public List<Audit> getStoryMatchesForUser(String userId, Long since) {
+        if (since == null) {
+            // If no since date provided, get all matches
+            return auditRepository.findByUserIdAndEntityTypeAndActionType(
+                    userId, Audit.EntityType.STORY, Audit.ActionType.MATCH, PageRequest.of(0, Integer.MAX_VALUE))
+                    .getContent();
+        }
+        return auditRepository.findStoryMatchesByUserIdAndCreatedAtAfter(userId, since);
+    }
+    
+    /**
+     * Check if a user has viewed a story within the last 1 minute
+     * @param userId The user ID
+     * @param storyId The story ID
+     * @return true if user has viewed the story within 1 minute, false otherwise
+     */
+    public boolean hasViewedStoryRecently(String userId, String storyId) {
+        if (userId == null) {
+            return false; // Unauthenticated users don't have cooldown
+        }
+        
+        // Calculate timestamp for 1 minute ago
+        long oneMinuteAgo = System.currentTimeMillis() - (1 * 60 * 1000);
+        
+        // Check if there's a recent view audit
+        List<Audit> recentViews = auditRepository.findByUserIdAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+                userId, storyId, Audit.EntityType.STORY, Audit.ActionType.VIEW, oneMinuteAgo);
+        
+        return !recentViews.isEmpty();
+    }
+    
+    /**
+     * Check if a user has viewed a story within the last 1 minute (for unauthenticated users by IP)
+     * @param ipAddress The IP address
+     * @param storyId The story ID
+     * @return true if IP has viewed the story within 1 minute, false otherwise
+     */
+    public boolean hasViewedStoryRecentlyByIP(String ipAddress, String storyId) {
+        if (ipAddress == null) {
+            return false;
+        }
+        
+        // Calculate timestamp for 1 minute ago
+        long oneMinuteAgo = System.currentTimeMillis() - (1 * 60 * 1000);
+        
+        // Check if there's a recent view audit by IP (for unauthenticated users)
+        List<Audit> recentViews = auditRepository.findByIpAddressAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+                ipAddress, storyId, Audit.EntityType.STORY, Audit.ActionType.VIEW, oneMinuteAgo);
+        
+        return !recentViews.isEmpty();
+    }
+    
+    /**
+     * Log story view for unauthenticated users (by IP address)
+     * @param ipAddress The IP address
+     * @param storyId The story ID
+     * @param userAgent The user agent
+     * @param sessionId The session ID
+     */
+    public void logStoryViewByIP(String ipAddress, String storyId, String userAgent, String sessionId) {
+        Map<String, Object> metadata = Map.of(
+            "interaction_type", "story_view",
+            "is_own_story", false,
+            "is_unauthenticated", true
+        );
+        // Use IP address as userId for unauthenticated users
+        logAudit(ipAddress, Audit.EntityType.STORY, Audit.ActionType.VIEW, storyId, userAgent, ipAddress, sessionId, metadata);
     }
 } 

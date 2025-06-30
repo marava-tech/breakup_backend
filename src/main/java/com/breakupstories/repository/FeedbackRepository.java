@@ -12,4 +12,10 @@ public interface FeedbackRepository extends MongoRepository<Feedback, String> {
     Page<Feedback> findByStoryId(String storyId, Pageable pageable);
     
     Page<Feedback> findByUserId(String userId, Pageable pageable);
+    
+    Page<Feedback> findByType(Feedback.FeedbackType type, Pageable pageable);
+    
+    Page<Feedback> findByStatus(Feedback.FeedbackStatus status, Pageable pageable);
+    
+    Page<Feedback> findByTypeAndStatus(Feedback.FeedbackType type, Feedback.FeedbackStatus status, Pageable pageable);
 } 

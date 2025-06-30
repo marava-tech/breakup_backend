@@ -1,103 +1,33 @@
 version: '3.8'
 
 services:
-  # MongoDB Database (Linux)
+  # MongoDB Database
   mongodb:
     image: mongo:7.0
-    container_name: breakup-stories-mongodb-linux
+    container_name: breakup-stories-mongodb
     restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
-      MONGO_INITDB_DATABASE: breakup_stories
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
-      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     networks:
       - breakup-network
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-  # Spring Boot Application (Linux - Port 9100)
+  # Spring Boot Application
   breakup-stories-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.linux
-    container_name: breakup-stories-api-linux
+    image: madhukinnera/breakup-stories-api:latest
+    container_name: breakup-stories-api
     restart: unless-stopped
     ports:
-      - "9100:9100"  # Exposed on port 9100
+      - "8080:8080"
     environment:
-      # Server Configuration
-      SERVER_PORT: 9100
-      
-      # MongoDB Configuration
-      SPRING_DATA_MONGODB_HOST: mongodb
-      SPRING_DATA_MONGODB_PORT: 27017
-      SPRING_DATA_MONGODB_DATABASE: breakup_stories
-      SPRING_DATA_MONGODB_USERNAME: admin
-      SPRING_DATA_MONGODB_PASSWORD: password123
-      SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: admin
-      
-      # JWT Configuration
-      JWT_SECRET: your-super-secret-jwt-key-change-in-production
-      JWT_EXPIRATION: 2592000000
-      
-      # Email Configuration (Gmail)
-      SPRING_MAIL_HOST: smtp.gmail.com
-      SPRING_MAIL_PORT: 587
-      SPRING_MAIL_USERNAME: ${GMAIL_USERNAME:abhedyam.team@gmail.com}
-      SPRING_MAIL_PASSWORD: ${GMAIL_APP_PASSWORD:aualeeatizzmmjyl}
-      
-      # Upload Service Configuration
-      UPLOAD_SERVICE_URL: ${UPLOAD_SERVICE_URL:http://localhost:9090}
-      UPLOAD_SERVICE_ENDPOINT: ${UPLOAD_SERVICE_ENDPOINT:/api/v1/upload}
-      
-      # Audio Streaming Configuration
-      AUDIO_BUFFER_SIZE: 8192
-      AUDIO_CACHE_DURATION: 3600
-      AUDIO_MAX_RANGE_SIZE: 1048576
-      AUDIO_ENABLE_CACHING: true
-      
-      # Logging
-      LOGGING_LEVEL_COM_BREAKUPSTORIES: INFO
-      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK: WARN
-      
-      # Actuator
-      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics
-      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: when-authorized
-      
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    networks:
-      - breakup-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9100/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # MongoDB Express (Optional - for database management)
-  mongo-express:
-    image: mongo-express:1.0.0
-    container_name: breakup-stories-mongo-express-linux
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
-      ME_CONFIG_MONGODB_ADMINPASSWORD: password123
-      ME_CONFIG_MONGODB_URL: mongodb://admin:password123@mongodb:27017/
-      ME_CONFIG_BASICAUTH_USERNAME: admin
-      ME_CONFIG_BASICAUTH_PASSWORD: password123
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/breakupstories
     depends_on:
       mongodb:
         condition: service_healthy

@@ -43,7 +43,7 @@ public class Audit {
     }
     
     public enum ActionType {
-        CREATE, UPDATE, DELETE, VIEW, LIKE, UNLIKE, COMMENT, PLAY, PAUSE, STOP, SHARE, DOWNLOAD
+        CREATE, UPDATE, DELETE, VIEW, LIKE, UNLIKE, COMMENT, PLAY, PAUSE, STOP, SHARE, DOWNLOAD , MATCH
     }
     
     // Helper methods for common metadata

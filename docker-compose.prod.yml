@@ -11,7 +11,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: breakup_stories
     ports:
-      - "127.0.0.1:27017:27017"  # Only accessible from localhost
+      - "localhost:27017:27017"  # Only accessible from localhost
     volumes:
       - mongodb_data:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
@@ -36,7 +36,7 @@ services:
     container_name: breakup-stories-api-prod
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:8080"  # Only accessible from localhost
+      - "localhost:8080:8080"  # Only accessible from localhost
     environment:
       # MongoDB Configuration
       SPRING_DATA_MONGODB_HOST: mongodb

@@ -237,7 +237,7 @@ public class DefaultConfigService {
         } catch (Exception e) {
             // Return a fallback URL if configuration is not found
             log.warn("Default thumbnail URL not found in configuration, using fallback URL", e);
-            return "https://res.cloudinary.com/dohsebpd1/image/upload/v1750951801/default_thumbnail.jpg";
+            return "";
         }
     }
 } 

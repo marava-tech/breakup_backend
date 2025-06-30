@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -18,6 +19,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -107,6 +109,89 @@ public class UploadServiceImpl implements UploadService {
             log.error("Error uploading {} files: {}", files.size(), e.getMessage(), e);
             throw new FileUploadException("Failed to upload files", e);
         }
+    }
+    
+    @Override
+    @Async
+    public CompletableFuture<String> uploadFileAsync(MultipartFile file) {
+        log.info("Starting async upload for file: {} ({} bytes)", file.getOriginalFilename(), file.getSize());
+        
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                HttpHeaders headers = createHeaders();
+                MultiValueMap<String, Object> body = createRequestBody(List.of(file));
+                
+                HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+                
+                String url = uploadServiceUrl + uploadEndpoint;
+                log.debug("Making async request to upload service: {}", url);
+                
+                ResponseEntity<UploadResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    requestEntity,
+                    UploadResponse.class
+                );
+                
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    String uploadedUrl = response.getBody().getData().get(0);
+                    log.info("Async file upload completed successfully: {} -> {}", 
+                        file.getOriginalFilename(), uploadedUrl);
+                    return uploadedUrl;
+                } else {
+                    log.error("Async upload service returned non-success status: {}", response.getStatusCode());
+                    throw new FileUploadException("Upload service returned status: " + response.getStatusCode());
+                }
+                
+            } catch (Exception e) {
+                log.error("Error in async upload for file {}: {}", file.getOriginalFilename(), e.getMessage(), e);
+                throw new FileUploadException("Failed to upload file: " + file.getOriginalFilename(), e);
+            }
+        });
+    }
+    
+    @Override
+    @Async
+    public CompletableFuture<List<String>> uploadFilesAsync(List<MultipartFile> files) {
+        log.info("Starting async upload for {} files", files.size());
+        
+        if (files == null || files.isEmpty()) {
+            log.warn("No files provided for async upload");
+            throw new FileUploadException("No files provided for upload");
+        }
+        
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                HttpHeaders headers = createHeaders();
+                MultiValueMap<String, Object> body = createRequestBody(files);
+                
+                HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+                
+                String url = uploadServiceUrl + uploadEndpoint;
+                log.debug("Making async request to upload service: {}", url);
+                
+                ResponseEntity<UploadResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    requestEntity,
+                    UploadResponse.class
+                );
+                
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    List<String> uploadedUrls = response.getBody().getData();
+                    log.info("Async files upload completed successfully: {} files -> {} URLs", 
+                        files.size(), uploadedUrls.size());
+                    return uploadedUrls;
+                } else {
+                    log.error("Async upload service returned non-success status: {}", response.getStatusCode());
+                    throw new FileUploadException("Upload service returned status: " + response.getStatusCode());
+                }
+                
+            } catch (Exception e) {
+                log.error("Error in async upload for {} files: {}", files.size(), e.getMessage(), e);
+                throw new FileUploadException("Failed to upload files", e);
+            }
+        });
     }
     
     private HttpHeaders createHeaders() {

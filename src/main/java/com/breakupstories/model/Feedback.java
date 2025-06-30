@@ -10,7 +10,6 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Data
 @Builder
@@ -22,18 +21,35 @@ public class Feedback {
     @Id
     private String id;
     
-    private String storyId;
+    private String storyId; // Optional - for story-specific feedback
     private String userId;
-    private FeedbackTone tone;
-    private List<Content> contents;
+    private FeedbackType type; // New field for feedback type
+    private String subject; // For general feedback
+    private String description; // For general feedback
+    private FeedbackStatus status; // New field for tracking feedback status
+    private String adminResponse; // Admin's response to the feedback
+    private String fileUrl;
     
     @CreatedDate
     private LocalDateTime createdAt;
     
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    public enum FeedbackType {
+        STORY_FEEDBACK, // Story-specific feedback (existing functionality)
+        BUG_REPORT,     // Report a bug or technical issue
+        FEATURE_REQUEST, // Request new features
+        SUGGESTION,     // General suggestions
+        COMPLAINT,      // Complaints about app or content
+        GENERAL         // General feedback
+    }
     
-    public enum FeedbackTone {
-        BF, GF, BESTIE, FATHER
+    public enum FeedbackStatus {
+        PENDING,    // New feedback, not yet reviewed
+        IN_REVIEW,  // Being reviewed by admin
+        RESOLVED,   // Issue resolved or suggestion implemented
+        CLOSED,     // Feedback closed without action
+        REJECTED    // Feedback rejected
     }
 } 

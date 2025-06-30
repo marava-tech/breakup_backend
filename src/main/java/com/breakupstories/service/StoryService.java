@@ -4,12 +4,12 @@ import com.breakupstories.dto.LikeRequest;
 import com.breakupstories.dto.LikeResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.StoryResponse;
-import com.breakupstories.dto.CommentRequest;
 import com.breakupstories.dto.CommentResponse;
 import com.breakupstories.model.Story;
 import com.breakupstories.model.StoryMetadata;
 import com.breakupstories.model.User;
 import com.breakupstories.repository.StoryRepository;
+import com.breakupstories.util.RequestContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -20,7 +20,6 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,27 +35,25 @@ public class StoryService {
     private final MockAIService mockAIService;
     private final BookmarkService bookmarkService;
 
-    public StoryResponse createStory(String userId, MultipartHttpServletRequest request) {
-        log.info("Creating story for user: {}", userId);
+    public StoryResponse createStory(String userId, MultipartHttpServletRequest request, String latitude, String longitude) {
+        String requestId = RequestContext.getRequestId();
+        log.info("Creating story for user: {} [RequestID: {}]", userId, requestId);
         
         try {
-            // Step 1: Upload the audio to upload service and get the URL
+            // Step 1: Validate audio file
             MultipartFile audioFile = request.getFile("audio");
             if (audioFile == null || audioFile.isEmpty()) {
                 throw new IllegalArgumentException("Audio file is required");
             }
             
-            log.info("Uploading audio file: {} ({} bytes)", audioFile.getOriginalFilename(), audioFile.getSize());
-            var uploadResponse = uploadService.uploadFile(audioFile);
-            String audioUrl = uploadResponse.getData().get(0);
-            log.info("Audio uploaded successfully: {}", audioUrl);
+            log.info("Starting async story creation for user: {} with file: {} ({} bytes) [RequestID: {}]", 
+                userId, audioFile.getOriginalFilename(), audioFile.getSize(), requestId);
             
-            // Step 2: Create initial story with PROCESSING status
+            // Step 2: Create initial story with PROCESSING status (no audio URL yet)
             Story story = Story.builder()
                     .userId(userId)
-                    .title("Processing...") // Will be updated after AI processing
-                    .audioUrl(audioUrl)
-                    .shareLink("") // Will be generated after processing
+                    .title("Uploading...") // Will be updated after audio upload and AI processing
+                    .audioUrl(null) // Will be set after async upload
                     .viewCount(0L)
                     .status(Story.StoryStatus.PROCESSING)
                     .contents(new ArrayList<>()) // Will be populated after AI processing
@@ -67,16 +64,41 @@ public class StoryService {
                     .build();
             
             Story savedStory = storyRepository.save(story);
-            log.info("Initial story created with ID: {}", savedStory.getId());
+            log.info("Initial story created with ID: {} for user: {} [RequestID: {}]", savedStory.getId(), userId, requestId);
             
-            // Step 3: Start async AI processing
-            mockAIService.processStoryWithAIAsync(savedStory.getId());
+            // Step 3: Start async audio upload and AI processing
+            uploadService.uploadFileAsync(audioFile)
+                .thenAccept(audioUrl -> {
+                    log.info("Audio upload completed for story {}: {} [RequestID: {}]", savedStory.getId(), audioUrl, requestId);
+                    
+                    // Update story with audio URL
+                    savedStory.setAudioUrl(audioUrl);
+                    savedStory.setTitle("Processing..."); // Update title to indicate AI processing
+                    storyRepository.save(savedStory);
+                    log.info("Story updated with audio URL: {} for story: {} [RequestID: {}]", audioUrl, savedStory.getId(), requestId);
+                    
+                    // Start async AI processing with location coordinates
+                    mockAIService.processStoryWithAIAsync(savedStory.getId(), latitude, longitude);
+                    log.info("AI processing started for story: {} with location data [RequestID: {}]", savedStory.getId(), requestId);
+                })
+                .exceptionally(throwable -> {
+                    log.error("Async audio upload failed for story {}: {} [RequestID: {}]", savedStory.getId(), throwable.getMessage(), requestId, throwable);
+                    // Update story status to REJECTED if upload fails
+                    var rejectedReasons = savedStory.getRejectionReasons();
+                    if(rejectedReasons==null){
+                        rejectedReasons = new ArrayList<>();
+                    }
+                    rejectedReasons.add(throwable.getMessage());
+                    savedStory.setRejectionReasons(rejectedReasons);
+                    updateStoryStatus(savedStory.getId(), Story.StoryStatus.REJECTED);
+                    return null;
+                });
             
             User user = userService.getUserEntityById(userId);
             return StoryResponse.fromStory(savedStory, user);
             
         } catch (Exception e) {
-            log.error("Error creating story for user {}: {}", userId, e.getMessage(), e);
+            log.error("Error creating story for user {}: {} [RequestID: {}]", userId, e.getMessage(), requestId, e);
             throw new RuntimeException("Failed to create story: " + e.getMessage(), e);
         }
     }

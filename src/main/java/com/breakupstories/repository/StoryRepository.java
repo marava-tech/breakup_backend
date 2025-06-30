@@ -60,4 +60,7 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     // Sum view count by user ID
     @Query("{'userId': ?0}")
     Long sumViewCountByUserId(String userId);
+    
+    // Find stories by user ID with null audioUrl ordered by createdAt desc
+    List<Story> findByUserIdAndAudioUrlIsNullOrderByCreatedAtDesc(String userId);
 } 

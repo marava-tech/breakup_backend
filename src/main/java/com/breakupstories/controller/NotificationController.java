@@ -27,7 +27,7 @@ public class NotificationController {
     private final AuditService auditService;
     private final ClientInfoService clientInfoService;
     
-    @GetMapping("/getnotifications")
+    @GetMapping
     @Operation(summary = "Get notifications", description = "Get notifications for the authenticated user")
     public ResponseEntity<NotificationResponse> getNotifications(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {

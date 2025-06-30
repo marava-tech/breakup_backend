@@ -90,4 +90,58 @@ public interface AuditRepository extends MongoRepository<Audit, String> {
     @Query(value = "{'entityId': {$in: ?0}, 'entityType': ?1, 'actionType': 'UNLIKE'}", 
            fields = "{'userId': 1, 'entityId': 1, 'createdAt': 1}")
     List<Audit> findUnlikesByEntityIdsAndEntityType(List<String> entityIds, Audit.EntityType entityType);
+    
+    /**
+     * Find story matches for a user since a given date
+     */
+    @Query(value = "{'userId': ?0, 'entityType': 'STORY', 'actionType': 'MATCH', 'createdAt': {$gte: ?1}}")
+    List<Audit> findStoryMatchesByUserIdAndCreatedAtAfter(String userId, Long since);
+    
+    /**
+     * Find audits by userId, entityType, and actionType with pagination
+     */
+    Page<Audit> findByUserIdAndEntityTypeAndActionType(
+            String userId, Audit.EntityType entityType, Audit.ActionType actionType, Pageable pageable);
+    
+    /**
+     * Find all audits for multiple entities with specific entity type and action type
+     */
+    @Query(value = "{'entityId': {$in: ?0}, 'entityType': ?1, 'actionType': ?2}")
+    List<Audit> findByEntityIdInAndEntityTypeAndActionType(
+            List<String> entityIds, Audit.EntityType entityType, Audit.ActionType actionType);
+    
+    /**
+     * Find all audits for multiple entities with specific entity type and action type since a given date
+     */
+    @Query(value = "{'entityId': {$in: ?0}, 'entityType': ?1, 'actionType': ?2, 'createdAt': {$gte: ?3}}")
+    List<Audit> findByEntityIdInAndEntityTypeAndActionTypeAndCreatedAtAfter(
+            List<String> entityIds, Audit.EntityType entityType, Audit.ActionType actionType, Long since);
+    
+    /**
+     * Find all audits for a specific entity with specific entity type and action type
+     */
+    @Query(value = "{'entityId': ?0, 'entityType': ?1, 'actionType': ?2}")
+    List<Audit> findByEntityIdAndEntityTypeAndActionType(
+            String entityId, Audit.EntityType entityType, Audit.ActionType actionType);
+    
+    /**
+     * Find all audits for a specific entity with specific entity type and action type since a given date
+     */
+    @Query(value = "{'entityId': ?0, 'entityType': ?1, 'actionType': ?2, 'createdAt': {$gte: ?3}}")
+    List<Audit> findByEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+            String entityId, Audit.EntityType entityType, Audit.ActionType actionType, Long since);
+    
+    /**
+     * Find audits by userId, entityId, entityType, actionType, and createdAt after a timestamp
+     */
+    @Query(value = "{'userId': ?0, 'entityId': ?1, 'entityType': ?2, 'actionType': ?3, 'createdAt': {$gte: ?4}}")
+    List<Audit> findByUserIdAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+            String userId, String entityId, Audit.EntityType entityType, Audit.ActionType actionType, Long since);
+    
+    /**
+     * Find audits by ipAddress, entityId, entityType, actionType, and createdAt after a timestamp
+     */
+    @Query(value = "{'ipAddress': ?0, 'entityId': ?1, 'entityType': ?2, 'actionType': ?3, 'createdAt': {$gte: ?4}}")
+    List<Audit> findByIpAddressAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
+            String ipAddress, String entityId, Audit.EntityType entityType, Audit.ActionType actionType, Long since);
 } 

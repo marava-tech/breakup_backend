@@ -2,13 +2,17 @@ package com.breakupstories.controller;
 
 import com.breakupstories.dto.LikeResponse;
 import com.breakupstories.dto.PagedResponse;
+import com.breakupstories.dto.RequestIdResponse;
 import com.breakupstories.dto.StoryResponse;
 import com.breakupstories.enums.StorySearchType;
+import com.breakupstories.model.Story;
 import com.breakupstories.model.User;
+import com.breakupstories.repository.StoryRepository;
 import com.breakupstories.service.AuditService;
 import com.breakupstories.service.ClientInfoService;
 import com.breakupstories.service.StoryService;
 import com.breakupstories.service.UserService;
+import com.breakupstories.util.RequestContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +22,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/stories")
@@ -30,20 +36,38 @@ public class StoryController {
     private final UserService userService;
     private final AuditService auditService;
     private final ClientInfoService clientInfoService;
+    private final StoryRepository storyRepository;
     
     @PostMapping
     @Operation(summary = "Create a new story", description = "Upload a new story with content, tags, and metadata")
-    public ResponseEntity<StoryResponse> createStory(
+    public ResponseEntity<RequestIdResponse<StoryResponse>> createStory(
             Authentication authentication,
             MultipartHttpServletRequest request) {
 
+        String requestId = RequestContext.getRequestId();
+        log.info("Story creation request received [RequestID: {}]", requestId);
+        
+        // Extract location coordinates from headers
+        String latitude = request.getHeader("X-Latitude");
+        String longitude = request.getHeader("X-Longitude");
+        
+        if (latitude != null && longitude != null) {
+            log.info("Location coordinates received [RequestID: {}] - lat: {}, lng: {}", requestId, latitude, longitude);
+        } else {
+            log.info("No location coordinates provided in headers [RequestID: {}]", requestId);
+        }
+        
         //request contains a audio file.
         
         String email = authentication.getName();
         String userId = userService.getUserEntityByEmail(email).getId();
         
-        StoryResponse response = storyService.createStory(userId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        StoryResponse response = storyService.createStory(userId, request, latitude, longitude);
+        
+        RequestIdResponse<StoryResponse> requestIdResponse = RequestIdResponse.of(response, "Story creation initiated successfully");
+        log.info("Story creation response sent [RequestID: {}]", requestId);
+        
+        return ResponseEntity.status(HttpStatus.CREATED).body(requestIdResponse);
     }
     
     @GetMapping
@@ -146,6 +170,7 @@ public class StoryController {
         
         StoryResponse response;
         String userId = null;
+        String ipAddress = null;
         
         if (authentication != null && authentication.isAuthenticated()) {
             String email = authentication.getName();
@@ -155,16 +180,50 @@ public class StoryController {
             response = storyService.getStoryById(storyId);
         }
         
-        // Increment view count for the story
-        storyService.incrementViewCount(storyId);
-        log.info("View count incremented for story: {}", storyId);
+        // Get client info for IP-based cooldown check
+        ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
+        ipAddress = clientInfo.getIpAddress();
         
-        // Audit story view
+        // Check if user has viewed this story recently (1-minute cooldown)
+        boolean hasViewedRecently = false;
         if (userId != null) {
-            ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
+            hasViewedRecently = auditService.hasViewedStoryRecently(userId, storyId);
+        } else if (ipAddress != null) {
+            hasViewedRecently = auditService.hasViewedStoryRecentlyByIP(ipAddress, storyId);
+        }
+        
+        if (hasViewedRecently) {
+            log.info("View skipped due to 1-minute cooldown - story: {}, user: {}, ip: {}", storyId, userId, ipAddress);
+            return ResponseEntity.ok(response);
+        }
+        
+        // Check if user is viewing their own story
+        boolean isOwnStory = false;
+        if (userId != null) {
+            Story story = storyRepository.findById(storyId).orElse(null);
+            if (story != null) {
+                isOwnStory = userId.equals(story.getUserId());
+            }
+        }
+        
+        // Only increment view count if user is not viewing their own story and hasn't viewed recently
+        if (!isOwnStory) {
+            storyService.incrementViewCount(storyId);
+            log.info("View count incremented for story: {} (viewed by user: {}, ip: {})", storyId, userId, ipAddress);
+        } else {
+            log.info("View count not incremented for story: {} (user viewing their own story: {})", storyId, userId);
+        }
+        
+        // Audit story view (only if not viewed recently and not own story)
+        if (userId != null) {
             auditService.logStoryView(userId, storyId, clientInfo.getUserAgent(), 
-                                    clientInfo.getIpAddress(), clientInfo.getSessionId());
-            log.info("Audited story view for user {} on story {}", userId, storyId);
+                                    clientInfo.getIpAddress(), clientInfo.getSessionId(), isOwnStory);
+            log.info("Audited story view for user {} on story {} (own story: {})", userId, storyId, isOwnStory);
+        } else if (ipAddress != null) {
+            // For unauthenticated users, log with IP address
+            auditService.logStoryViewByIP(ipAddress, storyId, clientInfo.getUserAgent(), 
+                                        clientInfo.getSessionId());
+            log.info("Audited story view for IP {} on story {}", ipAddress, storyId);
         }
         
         return ResponseEntity.ok(response);
@@ -266,6 +325,22 @@ public class StoryController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.warn("Error searching stories by title: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+
+    @GetMapping("/console")
+    @Operation(summary = "console person by story", description = "console person by story)")
+    public ResponseEntity<Map<String,String>> console(
+            @RequestParam String storyId,
+            @RequestParam String consolePersonType,
+            Authentication authentication) {
+        try {
+            Map<String,String> consoleResponse =  Map.of("consoleMessage","this is a long console message for story id "+storyId+" consoling as as "+consolePersonType);
+            return ResponseEntity.ok(consoleResponse);
+        } catch (Exception e) {
+            log.warn("Error generating consoling message: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }

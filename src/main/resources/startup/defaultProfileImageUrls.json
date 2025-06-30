@@ -1,19 +1,19 @@
 [
   {
     "key": "profile_male_image_url",
-    "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1750703839/breakup-project/vclt5frzazb2w8ed6ed0.png",
+    "value": "http://res.cloudinary.com/dohsebpd1/image/upload/v1751208391/breakup/default_male_profile.png",
     "description": "Default profile image URL for male users",
     "active": true
   },
   {
     "key": "profile_female_image_url",
-    "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1750703845/breakup-project/tprvjmh1blg6sudcc7k6.png",
+    "value": "http://res.cloudinary.com/dohsebpd1/image/upload/v1751208580/breakup/default_female_profile.png",
     "description": "Default profile image URL for female users",
     "active": true
   },
   {
     "key": "default_thumbnail_url",
-    "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1750703634/breakup-project/p2gevyvtladkcdumur8u.png",
+    "value": "http://res.cloudinary.com/dohsebpd1/image/upload/v1751208524/breakup/default_thumnail.png",
     "description": "Default profile image URL for female users",
     "active": true
   }

@@ -4,11 +4,14 @@ import com.breakupstories.dto.FeedbackRequest;
 import com.breakupstories.dto.FeedbackResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.model.Feedback;
+import com.breakupstories.model.User;
 import com.breakupstories.repository.FeedbackRepository;
+import com.breakupstories.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,47 +22,99 @@ import java.util.stream.Collectors;
 public class FeedbackService {
     
     private final FeedbackRepository feedbackRepository;
+    private final UserRepository userRepository;
     
-    public FeedbackResponse createFeedback(String userId, FeedbackRequest request) {
+    public FeedbackResponse createFeedback(String userId, FeedbackRequest request, String fileUrl) {
+        // Validate request based on feedback type
+        validateFeedbackRequest(request);
+        
         Feedback feedback = Feedback.builder()
                 .storyId(request.getStoryId())
                 .userId(userId)
-                .tone(request.getTone())
-                .contents(request.getContents())
+                .type(request.getType())
+                .subject(request.getSubject())
+                .description(request.getDescription())
+                .fileUrl(fileUrl)
+                .status(Feedback.FeedbackStatus.PENDING) // Default status for new feedback
                 .build();
         
         Feedback savedFeedback = feedbackRepository.save(feedback);
         return FeedbackResponse.fromFeedback(savedFeedback);
     }
     
+    private void validateFeedbackRequest(FeedbackRequest request) {
+        if (request.getType() == null) {
+            throw new IllegalArgumentException("Feedback type is required");
+        }
+        
+        // For story-specific feedback, validate required fields
+        if (request.getType() == Feedback.FeedbackType.STORY_FEEDBACK) {
+            if (request.getStoryId() == null || request.getStoryId().trim().isEmpty()) {
+                throw new IllegalArgumentException("Story ID is required for story feedback");
+            }
+        }
+        
+        // For general feedback, validate required fields
+        if (request.getType() != Feedback.FeedbackType.STORY_FEEDBACK) {
+            if (request.getSubject() == null || request.getSubject().trim().isEmpty()) {
+                throw new IllegalArgumentException("Subject is required for general feedback");
+            }
+            if (request.getDescription() == null || request.getDescription().trim().isEmpty()) {
+                throw new IllegalArgumentException("Description is required for general feedback");
+            }
+        }
+    }
+    
     public PagedResponse<FeedbackResponse> getFeedbacks(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Feedback> feedbackPage = feedbackRepository.findAll(pageable);
         
         List<FeedbackResponse> feedbacks = feedbackPage.getContent().stream()
-                .map(FeedbackResponse::fromFeedback)
+                .map(this::enrichFeedbackResponse)
                 .collect(Collectors.toList());
         
         return PagedResponse.of(feedbacks, page, size, feedbackPage.getTotalElements());
     }
     
     public PagedResponse<FeedbackResponse> getFeedbacksByStory(String storyId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Feedback> feedbackPage = feedbackRepository.findByStoryId(storyId, pageable);
         
         List<FeedbackResponse> feedbacks = feedbackPage.getContent().stream()
-                .map(FeedbackResponse::fromFeedback)
+                .map(this::enrichFeedbackResponse)
                 .collect(Collectors.toList());
         
         return PagedResponse.of(feedbacks, page, size, feedbackPage.getTotalElements());
     }
     
     public PagedResponse<FeedbackResponse> getFeedbacksByUser(String userId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Feedback> feedbackPage = feedbackRepository.findByUserId(userId, pageable);
         
         List<FeedbackResponse> feedbacks = feedbackPage.getContent().stream()
-                .map(FeedbackResponse::fromFeedback)
+                .map(this::enrichFeedbackResponse)
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(feedbacks, page, size, feedbackPage.getTotalElements());
+    }
+    
+    public PagedResponse<FeedbackResponse> getFeedbacksByType(Feedback.FeedbackType type, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Feedback> feedbackPage = feedbackRepository.findByType(type, pageable);
+        
+        List<FeedbackResponse> feedbacks = feedbackPage.getContent().stream()
+                .map(this::enrichFeedbackResponse)
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(feedbacks, page, size, feedbackPage.getTotalElements());
+    }
+    
+    public PagedResponse<FeedbackResponse> getFeedbacksByStatus(Feedback.FeedbackStatus status, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Feedback> feedbackPage = feedbackRepository.findByStatus(status, pageable);
+        
+        List<FeedbackResponse> feedbacks = feedbackPage.getContent().stream()
+                .map(this::enrichFeedbackResponse)
                 .collect(Collectors.toList());
         
         return PagedResponse.of(feedbacks, page, size, feedbackPage.getTotalElements());
@@ -69,10 +124,10 @@ public class FeedbackService {
         Feedback feedback = feedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new RuntimeException("Feedback not found with ID: " + feedbackId));
         
-        return FeedbackResponse.fromFeedback(feedback);
+        return enrichFeedbackResponse(feedback);
     }
     
-    public FeedbackResponse updateFeedback(String feedbackId, String userId, FeedbackRequest request) {
+    public FeedbackResponse updateFeedback(String feedbackId, String userId, FeedbackRequest request, String fileUrl) {
         Feedback feedback = feedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new RuntimeException("Feedback not found with ID: " + feedbackId));
         
@@ -81,12 +136,29 @@ public class FeedbackService {
             throw new RuntimeException("You can only update your own feedback");
         }
         
+        // Validate request
+        validateFeedbackRequest(request);
+        
         feedback.setStoryId(request.getStoryId());
-        feedback.setTone(request.getTone());
-        feedback.setContents(request.getContents());
+        feedback.setType(request.getType());
+        feedback.setSubject(request.getSubject());
+        feedback.setDescription(request.getDescription());
+        feedback.setFileUrl(fileUrl);
         
         Feedback updatedFeedback = feedbackRepository.save(feedback);
-        return FeedbackResponse.fromFeedback(updatedFeedback);
+        return enrichFeedbackResponse(updatedFeedback);
+    }
+    
+    // Admin method to update feedback status and add response
+    public FeedbackResponse updateFeedbackStatus(String feedbackId, Feedback.FeedbackStatus status, String adminResponse) {
+        Feedback feedback = feedbackRepository.findById(feedbackId)
+                .orElseThrow(() -> new RuntimeException("Feedback not found with ID: " + feedbackId));
+        
+        feedback.setStatus(status);
+        feedback.setAdminResponse(adminResponse);
+        
+        Feedback updatedFeedback = feedbackRepository.save(feedback);
+        return enrichFeedbackResponse(updatedFeedback);
     }
     
     public void deleteFeedback(String feedbackId, String userId) {
@@ -99,5 +171,20 @@ public class FeedbackService {
         }
         
         feedbackRepository.deleteById(feedbackId);
+    }
+    
+    // Helper method to enrich feedback response with user information
+    private FeedbackResponse enrichFeedbackResponse(Feedback feedback) {
+        FeedbackResponse response = FeedbackResponse.fromFeedback(feedback);
+        
+        // Add username if available
+        try {
+            userRepository.findById(feedback.getUserId()).ifPresent(user -> response.setUsername(user.getName()));
+        } catch (Exception e) {
+            // Log error but don't fail the request
+            System.err.println("Error fetching user for feedback: " + e.getMessage());
+        }
+        
+        return response;
     }
 } 

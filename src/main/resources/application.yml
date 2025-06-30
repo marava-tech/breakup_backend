@@ -19,8 +19,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: abhedyam.team@gmail.com
-    password: aualeeatizzmmjyl
+    username: marava.technologies@gmail.com
+    password: REDACTED_GMAIL_PASSWORD
     properties:
       mail:
         smtp:
@@ -38,7 +38,6 @@ server:
   port: 8080
   servlet:
     context-path: /
-  address: 0.0.0.0
 
 # JWT Configuration
 jwt:

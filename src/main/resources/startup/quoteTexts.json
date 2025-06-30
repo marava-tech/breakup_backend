@@ -28,5 +28,35 @@
     "value": "You are stronger than you think and more capable than you know.",
     "description": "Motivational breakup quote 5",
     "active": true
+  },
+  {
+    "key": "quote_text_6",
+    "value": "Letting go isn't the end of the world; it's the beginning of a new path.",
+    "description": "Motivational breakup quote 6",
+    "active": true
+  },
+  {
+    "key": "quote_text_7",
+    "value": "The best way to get over someone is to realize you deserve better.",
+    "description": "Motivational breakup quote 7",
+    "active": true
+  },
+  {
+    "key": "quote_text_8",
+    "value": "Don't cry because it's over, smile because it happened.",
+    "description": "Motivational breakup quote 8",
+    "active": true
+  },
+  {
+    "key": "quote_text_9",
+    "value": "Growth often comes after a period of pain. Embrace the journey.",
+    "description": "Motivational breakup quote 9",
+    "active": true
+  },
+  {
+    "key": "quote_text_10",
+    "value": "You are a limited edition. Don't settle for a copy.",
+    "description": "Motivational breakup quote 10",
+    "active": true
   }
 ]

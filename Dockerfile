@@ -1,38 +1,14 @@
-# Multi-stage build for Spring Boot application
-FROM eclipse-temurin:17-jdk-alpine AS builder
-
-# Set working directory
-WORKDIR /app
-
-# Copy Maven wrapper and pom.xml
-COPY .mvn/ .mvn/
-COPY mvnw .
-COPY pom.xml .
-
-# Make mvnw executable
-RUN chmod +x mvnw
-
-# Download dependencies (this layer will be cached if pom.xml doesn't change)
-RUN ./mvnw dependency:go-offline -B
-
-# Copy source code
-COPY src/ src/
-
-# Build the application
-RUN ./mvnw clean package -DskipTests
-
-# Runtime stage
-FROM eclipse-temurin:17-jre-alpine
+# Simple Docker image for Spring Boot application
+FROM openjdk:17-slim
 
 # Create app user for security
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 # Set working directory
 WORKDIR /app
 
-# Copy the built JAR from builder stage
-COPY --from=builder /app/target/breakup-be-1.0.0.jar app.jar
+# Copy the built JAR from target folder
+COPY target/breakup-be-1.0.0.jar app.jar
 
 # Change ownership to app user
 RUN chown -R appuser:appgroup /app

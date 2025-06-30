@@ -25,7 +25,6 @@ public class StoryResponse {
     private String title;
     private String audioUrl;
     private String thumbnailUrl;
-    private String shareLink;
     private Long viewCount;
     private Long likeCount;
     private Long commentCount;
@@ -51,7 +50,6 @@ public class StoryResponse {
                 .title(story.getTitle())
                 .audioUrl(story.getAudioUrl())
                 .thumbnailUrl(story.getThumbnailUrl())
-                .shareLink(story.getShareLink())
                 .language(story.getMetadata() != null ? story.getMetadata().getLanguage() : null)
                 .viewCount(story.getViewCount())
                 .likeCount(likeCount)
@@ -77,7 +75,6 @@ public class StoryResponse {
                 .title(story.getTitle())
                 .audioUrl(story.getAudioUrl())
                 .thumbnailUrl(story.getThumbnailUrl())
-                .shareLink(story.getShareLink())
                 .language(story.getMetadata() != null ? story.getMetadata().getLanguage() : null)
                 .viewCount(story.getViewCount())
                 .likeCount(likeCount)
@@ -103,7 +100,6 @@ public class StoryResponse {
                 .title(story.getTitle())
                 .audioUrl(story.getAudioUrl())
                 .thumbnailUrl(story.getThumbnailUrl())
-                .shareLink(story.getShareLink())
                 .language(story.getMetadata() != null ? story.getMetadata().getLanguage() : null)
                 .viewCount(story.getViewCount())
                 .status(story.getStatus())

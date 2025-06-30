@@ -14,10 +14,7 @@ import java.util.List;
 public class NotificationResponse {
     
     private String userId;
-    private long totalNewLikes;
-    private long totalNewViews;
-    private long totalNewComments;
+    private List<NotificationItem> notifications;
     private Long lastNotificationView;
     private Boolean notify;
-
 } 

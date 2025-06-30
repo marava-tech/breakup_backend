@@ -11,7 +11,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: breakup_stories
     ports:
-      - "127.0.0.1:27017:27017"  # Only accessible from localhost
+      - "localhost:27017:27017"  # Only accessible from localhost
     volumes:
       - mongodb_data:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
@@ -36,7 +36,7 @@ services:
     container_name: breakup-stories-api-linux-prod
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9100:9100"  # Only accessible from localhost on port 9100
+      - "localhost:9100:9100"  # Only accessible from localhost on port 9100
     environment:
       # Server Configuration
       SERVER_PORT: 9100

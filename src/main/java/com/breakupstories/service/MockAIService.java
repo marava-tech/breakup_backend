@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+
 
 /**
  * Mock AI Service implementation for all AI functionalities
@@ -28,6 +28,7 @@ public class MockAIService {
 
     private final StoryRepository storyRepository;
     private final DefaultConfigService defaultConfigService;
+    private final AsyncStoryMatchingService asyncStoryMatchingService;
 
 
     // List of negative/hateful words for basic filtering
@@ -77,8 +78,14 @@ public class MockAIService {
 
 
     @Async
-    public void  processStoryWithAIAsync(String storyId) {
-        log.info("Starting async AI processing for story: {}", storyId);
+    public void processStoryWithAIAsync(String storyId) {
+        // Call the overloaded method with null coordinates for backward compatibility
+        processStoryWithAIAsync(storyId, null, null);
+    }
+
+    @Async
+    public void processStoryWithAIAsync(String storyId, String latitude, String longitude) {
+        log.info("Starting async AI processing for story: {} with location data: lat={}, lng={}", storyId, latitude, longitude);
         try {
             // Simulate processing time (10 seconds)
             Thread.sleep(10000);
@@ -122,6 +129,24 @@ public class MockAIService {
 
             // 8.2 - get locations involved in the story (add current location if lat, long present in header)
             List<String> locations = mockExtractLocations(detailedStory);
+            
+            // Add current location if coordinates are provided
+            if (latitude != null && longitude != null && !latitude.trim().isEmpty() && !longitude.trim().isEmpty()) {
+                String currentLocation = extractLocationFromCoordinates(latitude, longitude);
+                if (currentLocation != null) {
+                    // Parse the comma-separated location string
+                    String[] locationParts = currentLocation.split(", ");
+                    if (locationParts.length >= 2) {
+                        String district = locationParts[0];
+                        String state = locationParts[1];
+                        String pincode = locationParts.length >= 3 ? locationParts[2] : "";
+                        
+                        // Add current location to locations list
+                        locations.add(district + ", " + state);
+                        log.info("Current location added for story {}: {}", storyId, currentLocation);
+                    }
+                }
+            }
             log.info("Locations extracted for story {}: {}", storyId, locations);
 
             // 8.3 - fetch pincodes of the location (send location names)
@@ -135,23 +160,36 @@ public class MockAIService {
             String deviceInfo = mockGetDeviceInfo();
             log.info("Device info extracted for story {}: {}", storyId, deviceInfo);
 
-            // Create metadata object
+            // Extract current location details if coordinates are provided
+            String currentDistrict = null;
+            String currentState = null;
+            String currentPincode = null;
+            
+            if (latitude != null && longitude != null && !latitude.trim().isEmpty() && !longitude.trim().isEmpty()) {
+                String currentLocation = extractLocationFromCoordinates(latitude, longitude);
+                if (currentLocation != null) {
+                    String[] locationParts = currentLocation.split(", ");
+                    if (locationParts.length >= 3) {
+                        currentDistrict = locationParts[0];
+                        currentState = locationParts[1];
+                        currentPincode = locationParts[2];
+                    }
+                }
+            }
+
+            // Create metadata object with current location if available
             StoryMetadata metadata = StoryMetadata.builder()
                     .names(names)
                     .locations(locations)
                     .pincodes(pincodes)
-                    .state(mockGetState(locations))
-                    .district(mockGetState(locations))
+                    .state(currentState != null ? currentState : mockGetState(locations))
+                    .district(currentDistrict != null ? currentDistrict : mockGetState(locations))
                     .language(language)
                     .deviceInfo(deviceInfo)
                     .build();
 
-            // Step 9: Mock Shareable Link Generation
-            String shareLink = mockCreateShareableLink(storyId);
-            log.info("Shareable link created for story: {}", storyId);
-
             // Update the story with all processed data including metadata
-            updateStoryWithAIResults(storyId, title, contents, tags, emotions, shareLink, metadata);
+            updateStoryWithAIResults(storyId, title, contents, tags, emotions, metadata);
 
             log.info("AI processing completed successfully for story: {}", storyId);
 
@@ -160,7 +198,6 @@ public class MockAIService {
             // Update story status to REJECTED (failed processing)
             updateStoryStatusWithRejection(storyId, Story.StoryStatus.REJECTED, Arrays.asList("AI processing failed: " + e.getMessage()));
         }
-
     }
 
     /**
@@ -247,7 +284,7 @@ public class MockAIService {
             log.info("Shareable link created for story: {}", storyId);
 
             // Update the story with all processed data including metadata
-            updateStoryWithAIResults(storyId, title, contents, tags, emotions, shareLink, metadata);
+            updateStoryWithAIResults(storyId, title, contents, tags, emotions, metadata);
 
             log.info("AI processing completed successfully for story: {}", storyId);
 
@@ -339,8 +376,10 @@ public class MockAIService {
     private List<String> mockGenerateAnimatedImages(String detailedStory) {
         // Mock animated image URLs (skip for now as mentioned in comments)
         return Arrays.asList(
-                "https://res.cloudinary.com/dohsebpd1/image/upload/v1750703937/breakup-project/itv6xld5k1j1qa3daqoh.png",
-                "https://res.cloudinary.com/dohsebpd1/image/upload/v1750703937/breakup-project/itv6xld5k1j1qa3daqoh.png"
+             "https://res.cloudinary.com/dohsebpd1/image/upload/v1751188433/breakup/uufsmpw3kzz7bm4fo1zb.png",
+                "https://res.cloudinary.com/dohsebpd1/image/upload/v1751188410/breakup/uoktya7dzlishq5goyiq.png",
+                "https://res.cloudinary.com/dohsebpd1/image/upload/v1751188413/breakup/wqnuh3hjulpkuvovxwey.png",
+                "https://res.cloudinary.com/dohsebpd1/image/upload/v1751188424/breakup/hvxpmlzkq4vl2spazmyy.png"
         );
     }
 
@@ -564,7 +603,7 @@ public class MockAIService {
     }
 
     private void updateStoryWithAIResults(String storyId, String title, List<Content> contents,
-                                          List<String> tags, List<Emotion> emotions, String shareLink, StoryMetadata metadata) {
+                                          List<String> tags, List<Emotion> emotions, StoryMetadata metadata) {
         Story story = storyRepository.findById(storyId)
                 .orElseThrow(() -> new RuntimeException("Story not found: " + storyId));
 
@@ -572,7 +611,6 @@ public class MockAIService {
         story.setContents(contents);
         story.setTags(tags);
         story.setEmotions(emotions);
-        story.setShareLink(shareLink);
         story.setStatus(Story.StoryStatus.ACTIVE);
 
         // Mock and set thumbnailUrl
@@ -593,6 +631,9 @@ public class MockAIService {
 
         storyRepository.save(story);
         log.info("Story updated with AI results: {}", storyId);
+
+        // Trigger async story matching when status is changed to ACTIVE
+        asyncStoryMatchingService.processStoryMatchingAsync(storyId, story.getUserId());
     }
 
     private void updateStoryStatusWithRejection(String storyId, Story.StoryStatus status, List<String> rejectionReasons) {
@@ -605,7 +646,100 @@ public class MockAIService {
         log.info("Story status updated to {} with rejection reasons: {}", status, storyId);
     }
 
-
-
+    /**
+     * Extract location details from latitude and longitude coordinates
+     * @param latitude The latitude coordinate
+     * @param longitude The longitude coordinate
+     * @return Comma-separated string containing district, state, and pincode
+     */
+    public String extractLocationFromCoordinates(String latitude, String longitude) {
+        if (latitude == null || longitude == null || latitude.trim().isEmpty() || longitude.trim().isEmpty()) {
+            log.warn("Invalid coordinates provided: lat={}, lng={}", latitude, longitude);
+            return null;
+        }
+        
+        try {
+            double lat = Double.parseDouble(latitude);
+            double lng = Double.parseDouble(longitude);
+            
+            log.info("Extracting location details for coordinates: lat={}, lng={}", lat, lng);
+            
+            // Mock location extraction based on coordinates
+            // In a real implementation, this would call a geocoding service like Google Maps API
+            String locationDetails = mockGeocodeCoordinates(lat, lng);
+            
+            log.info("Location details extracted: {}", locationDetails);
+            return locationDetails;
+            
+        } catch (NumberFormatException e) {
+            log.error("Invalid coordinate format: lat={}, lng={}", latitude, longitude, e);
+            return null;
+        }
+    }
+    
+    /**
+     * Mock geocoding service to convert coordinates to location details
+     * @param latitude The latitude coordinate
+     * @param longitude The longitude coordinate
+     * @return Comma-separated string containing district, state, and pincode
+     */
+    private String mockGeocodeCoordinates(double latitude, double longitude) {
+        // Mock implementation - in real scenario, this would call Google Maps Geocoding API
+        // or similar service to get actual location details
+        
+        // Simulate processing time
+        try {
+            Thread.sleep(500); // Simulate API call delay
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        // Mock location data based on coordinate ranges
+        // This is a simplified mock - real implementation would use actual geocoding
+        
+        if (latitude >= 8.0 && latitude <= 37.0 && longitude >= 68.0 && longitude <= 97.0) {
+            // India coordinates - return mock Indian locations
+            if (latitude >= 19.0 && latitude <= 20.0 && longitude >= 72.0 && longitude <= 73.0) {
+                return "Mumbai, Maharashtra, 400001";
+            } else if (latitude >= 12.0 && latitude <= 13.0 && longitude >= 77.0 && longitude <= 78.0) {
+                return "Bangalore, Karnataka, 560001";
+            } else if (latitude >= 28.0 && latitude <= 29.0 && longitude >= 77.0 && longitude <= 78.0) {
+                return "New Delhi, Delhi, 110001";
+            } else if (latitude >= 22.0 && latitude <= 23.0 && longitude >= 88.0 && longitude <= 89.0) {
+                return "Kolkata, West Bengal, 700001";
+            } else if (latitude >= 13.0 && latitude <= 14.0 && longitude >= 80.0 && longitude <= 81.0) {
+                return "Chennai, Tamil Nadu, 600001";
+            } else if (latitude >= 17.0 && latitude <= 18.0 && longitude >= 78.0 && longitude <= 79.0) {
+                return "Hyderabad, Telangana, 500001";
+            } else if (latitude >= 23.0 && latitude <= 24.0 && longitude >= 72.0 && longitude <= 73.0) {
+                return "Ahmedabad, Gujarat, 380001";
+            } else if (latitude >= 26.0 && latitude <= 27.0 && longitude >= 80.0 && longitude <= 81.0) {
+                return "Lucknow, Uttar Pradesh, 226001";
+            } else if (latitude >= 25.0 && latitude <= 26.0 && longitude >= 82.0 && longitude <= 83.0) {
+                return "Varanasi, Uttar Pradesh, 221001";
+            } else if (latitude >= 20.0 && latitude <= 21.0 && longitude >= 85.0 && longitude <= 86.0) {
+                return "Bhubaneswar, Odisha, 751001";
+            } else {
+                // Generic Indian location
+                return "Unknown District, Unknown State, 000000";
+            }
+        } else {
+            // International coordinates
+            if (latitude >= 40.0 && latitude <= 41.0 && longitude >= -74.0 && longitude <= -73.0) {
+                return "New York, New York, 10001";
+            } else if (latitude >= 51.0 && latitude <= 52.0 && longitude >= -0.5 && longitude <= 0.5) {
+                return "London, England, SW1A1AA";
+            } else if (latitude >= 48.0 && latitude <= 49.0 && longitude >= 2.0 && longitude <= 3.0) {
+                return "Paris, France, 75001";
+            } else if (latitude >= 35.0 && latitude <= 36.0 && longitude >= 139.0 && longitude <= 140.0) {
+                return "Tokyo, Japan, 100-0001";
+            } else if (latitude >= -33.0 && latitude <= -34.0 && longitude >= 151.0 && longitude <= 152.0) {
+                return "Sydney, New South Wales, 2000";
+            } else {
+                // Generic international location
+                return "Unknown District, Unknown State, 000000";
+            }
+        }
+    }
 
 }

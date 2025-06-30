@@ -1,6 +1,5 @@
 package com.breakupstories.dto;
 
-import com.breakupstories.model.Content;
 import com.breakupstories.model.Feedback;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,8 +18,13 @@ public class FeedbackResponse {
     private String id;
     private String storyId;
     private String userId;
-    private Feedback.FeedbackTone tone;
-    private List<Content> contents;
+    private String username;
+    private Feedback.FeedbackType type;
+    private String subject;
+    private String description;
+    private String fileUrl;
+    private Feedback.FeedbackStatus status;
+    private String adminResponse;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
@@ -29,8 +33,12 @@ public class FeedbackResponse {
                 .id(feedback.getId())
                 .storyId(feedback.getStoryId())
                 .userId(feedback.getUserId())
-                .tone(feedback.getTone())
-                .contents(feedback.getContents())
+                .type(feedback.getType())
+                .subject(feedback.getSubject())
+                .description(feedback.getDescription())
+                .fileUrl(feedback.getFileUrl())
+                .status(feedback.getStatus())
+                .adminResponse(feedback.getAdminResponse())
                 .createdAt(feedback.getCreatedAt())
                 .updatedAt(feedback.getUpdatedAt())
                 .build();
