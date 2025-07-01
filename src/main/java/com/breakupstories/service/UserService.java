@@ -15,6 +15,7 @@ import com.breakupstories.repository.LikeRepository;
 import com.breakupstories.repository.CommentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -101,15 +102,11 @@ public class UserService implements UserDetailsService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", userEmail));
         
         // Upload the image using upload service
-        var uploadResponse = uploadService.uploadFile(imageFile);
-        
-        if (uploadResponse.getData() == null || uploadResponse.getData().isEmpty()) {
-            throw new RuntimeException("Failed to upload profile image - no URLs returned");
+        var newProfileImageUrl = uploadService.uploadSingleFile(imageFile);
+        if(ObjectUtils.isEmpty(newProfileImageUrl)){
+            log.error("profile image is null");
+            throw  new RuntimeException("Unable to upload");
         }
-        
-        // Get the first uploaded URL
-        String newProfileImageUrl = uploadResponse.getData().get(0);
-        
         // Update user's profile image URL
         user.setProfileImageUrl(newProfileImageUrl);
         User updatedUser = userRepository.save(user);

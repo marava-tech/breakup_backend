@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -100,21 +101,20 @@ public class DefaultConfigController {
             // Upload the file
             log.info("Uploading file: {} ({} bytes) for config key: {}", 
                 file.getOriginalFilename(), file.getSize(), key);
-            var uploadResponse = uploadService.uploadFile(file);
+            var uploadResponse = uploadService.uploadSingleFile(file);
             
-            if (uploadResponse.getData() == null || uploadResponse.getData().isEmpty()) {
+            if (ObjectUtils.isEmpty(uploadResponse)) {
                 log.error("File upload failed - no URL returned for file: {}", file.getOriginalFilename());
                 return ResponseEntity.badRequest().build();
             }
             
             // Get the first uploaded URL
-            String fileUrl = uploadResponse.getData().get(0);
-            log.info("File uploaded successfully. URL: {}", fileUrl);
+            log.info("File uploaded successfully. URL: {}", uploadResponse);
             
             // Create or update the config
             DefaultConfigRequest configRequest = DefaultConfigRequest.builder()
                     .key(key.trim())
-                    .value(fileUrl)
+                    .value(uploadResponse)
                     .description(description != null ? description.trim() : "File uploaded for key: " + key)
                     .active(active)
                     .build();
@@ -123,11 +123,11 @@ public class DefaultConfigController {
             try {
                 var existingConfig = defaultConfigService.getByKey(key);
                 // Update existing config
-                log.info("Updated existing config for key: {} with file URL: {}", key, fileUrl);
+                log.info("Updated existing config for key: {} with file URL: {}", key, uploadResponse);
                 return ResponseEntity.ok(defaultConfigService.update(existingConfig.getId(), configRequest));
             } catch (Exception e) {
                 // Create new config
-                log.info("Created new config for key: {} with file URL: {}", key, fileUrl);
+                log.info("Created new config for key: {} with file URL: {}", key, uploadResponse);
                 return ResponseEntity.status(HttpStatus.CREATED).body(defaultConfigService.create(configRequest));
             }
             

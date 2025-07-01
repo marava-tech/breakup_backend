@@ -51,10 +51,7 @@ public class FeedbackController {
             String fileUrl = null;
             MultipartFile file = request.getFile("file");
             if (file != null && !file.isEmpty()) {
-                UploadResponse uploadResponse = uploadService.uploadFile(file);
-                if (uploadResponse.getData() != null && !uploadResponse.getData().isEmpty()) {
-                    fileUrl = uploadResponse.getData().get(0);
-                }
+                fileUrl = uploadService.uploadSingleFile(file);
             }
             
             FeedbackResponse response = feedbackService.createFeedback(userId, feedbackRequest, fileUrl);
@@ -159,10 +156,7 @@ public class FeedbackController {
             String fileUrl = null;
             MultipartFile file = request.getFile("file");
             if (file != null && !file.isEmpty()) {
-                UploadResponse uploadResponse = uploadService.uploadFile(file);
-                if (uploadResponse.getData() != null && !uploadResponse.getData().isEmpty()) {
-                    fileUrl = uploadResponse.getData().get(0);
-                }
+                fileUrl  = uploadService.uploadSingleFile(file);
             }
             
             FeedbackResponse response = feedbackService.updateFeedback(feedbackId, userId, feedbackRequest, fileUrl);

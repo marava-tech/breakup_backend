@@ -44,11 +44,6 @@ jwt:
   secret: ${JWT_SECRET:rA3jPjK6o0IBkSyKXZ8OEwTbU5z6a4NE2Kq+dfS2A3k=}
   expiration: 2592000000 # 30 days in milliseconds
 
-# Upload Service Configuration
-upload:
-  service:
-    url: ${UPLOAD_SERVICE_URL:http://localhost:9090}
-    endpoint: ${UPLOAD_SERVICE_ENDPOINT:/api/v1/upload}
 
 # Audio Streaming Configuration
 audio:

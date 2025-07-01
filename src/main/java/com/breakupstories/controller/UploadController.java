@@ -23,28 +23,16 @@ public class UploadController {
     
     @PostMapping("/file")
     @Operation(summary = "Upload single file", description = "Upload a single file to the external service")
-    public ResponseEntity<UploadResponse> uploadFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
         log.info("Received single file upload request: {} ({} bytes)", 
             file.getOriginalFilename(), file.getSize());
         
-        UploadResponse response = uploadService.uploadFile(file);
+       String fileUrl = uploadService.uploadSingleFile(file);
         
-        log.info("Single file upload completed successfully: {} -> {} URLs", 
-            file.getOriginalFilename(), response.getData().size());
+        log.info("Single file upload completed successfully:  -> {} URLs",
+            file.getOriginalFilename());
         
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(fileUrl);
     }
-    
-    @PostMapping("/files")
-    @Operation(summary = "Upload multiple files", description = "Upload multiple files to the external service")
-    public ResponseEntity<UploadResponse> uploadFiles(@RequestParam("files") List<MultipartFile> files) {
-        log.info("Received multiple files upload request: {} files", files.size());
-        
-        UploadResponse response = uploadService.uploadFiles(files);
-        
-        log.info("Multiple files upload completed successfully: {} files -> {} URLs", 
-            files.size(), response.getData().size());
-        
-        return ResponseEntity.ok(response);
-    }
+
 } 

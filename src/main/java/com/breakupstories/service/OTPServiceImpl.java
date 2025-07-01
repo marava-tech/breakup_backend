@@ -105,7 +105,7 @@ public class OTPServiceImpl implements OTPService {
         try {
             var gmailContent = getUnFormattedGmailContent();
             var formattedGmailContent = String.format(gmailContent, otp);
-//            gmailSender.sendGmail(email, "Breakup Stories Verification OTP", formattedGmailContent);
+            gmailSender.sendGmail(email, "Breakup Stories Verification OTP", formattedGmailContent);
             log.info("Successfully sent OTP to email: {}", email);
             return true;
         } catch (Exception e) {
