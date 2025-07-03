@@ -5,6 +5,10 @@ services:
     image: mongo:7.0
     container_name: breakup-stories-mongodb
     restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: madhu
+      MONGO_INITDB_ROOT_PASSWORD: Madhu7814
+      MONGO_INITDB_DATABASE: breakup_stories
     ports:
       - "27017:27017"
     volumes:
@@ -26,7 +30,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/breakupstories
+      - SPRING_DATA_MONGODB_URI=mongodb://madhu:Madhu7814@mongodb:27017/breakup_stories?authSource=admin
     depends_on:
       mongodb:
         condition: service_healthy

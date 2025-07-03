@@ -202,7 +202,7 @@ public class RewardService {
             int referralWelcomePoints =  Integer.parseInt(defaultConfigService.getByKey("default_referral_welcome_points").getValue());
 
             // Reward the referrer
-            addCoins(referrer.get().getId(), referralRewardPoints, "referral_reward", newUserId);
+            addCoins(referrer.get().getId(), referralRewardPoints, "referral_reward_"+newUser.getName(), newUserId);
             
             // Reward the referred user
             addCoins(newUserId, referralWelcomePoints, "referral_welcome", referrer.get().getId());

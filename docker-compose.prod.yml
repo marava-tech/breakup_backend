@@ -7,7 +7,7 @@ services:
     container_name: breakup-stories-mongodb-prod
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:admin}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:madhu}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: breakup_stories
     ports:

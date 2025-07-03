@@ -8,7 +8,11 @@ spring:
       host: localhost
       port: 27017
       database: breakup_stories
+      username: madhu
+      password: Madhu7814
+      authentication-database: admin
       auto-index-creation: true
+
   
   jackson:
     default-property-inclusion: non_null
