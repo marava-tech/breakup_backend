@@ -5,24 +5,36 @@ import com.breakupstories.dto.LikeResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.StoryResponse;
 import com.breakupstories.dto.CommentResponse;
+import com.breakupstories.dto.LocationInfoResponse;
+import com.breakupstories.dto.StorySearchRequest;
+import com.breakupstories.dto.StorySearchResponse;
 import com.breakupstories.model.Story;
+import com.breakupstories.model.StoryDataStore;
 import com.breakupstories.model.StoryMetadata;
 import com.breakupstories.model.User;
 import com.breakupstories.repository.StoryRepository;
+import com.breakupstories.repository.StoryDataStoreRepository;
+import com.breakupstories.repository.UserRepository;
 import com.breakupstories.util.ApplicationContextProvider;
 import com.breakupstories.util.RequestContext;
+import com.breakupstories.util.ListUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -30,16 +42,21 @@ import java.util.stream.Collectors;
 public class StoryService {
     
     private final StoryRepository storyRepository;
+    private final StoryDataStoreRepository storyDataStoreRepository;
+    private final UserRepository userRepository;
     private final LikeService likeService;
     private final CommentService commentService;
     @Lazy
     private final UserService userService;
     @Lazy
     private final BookmarkService bookmarkService;
-    private final AsyncStoryProcessingService asyncStoryProcessingService;
+    private final StoryDataStoreService storyDataStoreService;
+    private final ClientInfoService clientInfoService;
+    private final DefaultConfigService defaultConfigService;
 
-    public StoryResponse createStory(String userId, MultipartHttpServletRequest request, String latitude, String longitude) {
+    public StoryResponse createStory(User user, MultipartHttpServletRequest request, Map<String,String> uploadMetadata) {
         String requestId = RequestContext.getRequestId();
+        String userId = user.getId();
         log.info("Creating story for user: {} [RequestID: {}]", userId, requestId);
         
         try {
@@ -52,32 +69,61 @@ public class StoryService {
             log.info("Starting story creation for user: {} with file: {} ({} bytes) [RequestID: {}]", 
                 userId, audioFile.getOriginalFilename(), audioFile.getSize(), requestId);
             
-            // Step 2: Create initial story with PROCESSING status (no audio URL yet)
+            // Step 2: Store audio file temporarily for background processing
+            // In a real implementation, you might store this in a temporary storage service
+            // For now, we'll store the file bytes in the uploadMetadata
+            if (uploadMetadata == null) {
+                uploadMetadata = new HashMap<>();
+            }
+            
+            // Store file information for background processing
+            uploadMetadata.put("audioFileName", audioFile.getOriginalFilename());
+            uploadMetadata.put("audioFileSize", String.valueOf(audioFile.getSize()));
+            uploadMetadata.put("audioContentType", audioFile.getContentType());
+            
+            // Store file bytes as base64 (for demo purposes - in production, use proper file storage)
+            try {
+                byte[] fileBytes = audioFile.getBytes();
+                String base64File = java.util.Base64.getEncoder().encodeToString(fileBytes);
+                uploadMetadata.put("audioFileData", base64File);
+                log.info("Audio file stored temporarily for background processing [RequestID: {}]", requestId);
+            } catch (Exception e) {
+                log.error("Failed to store audio file for background processing [RequestID: {}]: {}", requestId, e.getMessage());
+                throw new RuntimeException("Failed to store audio file: " + e.getMessage(), e);
+            }
+            
+            // Step 3: Create initial Story with UPLOAD_PENDING status
             Story story = Story.builder()
                     .userId(userId)
-                    .title("Uploading...") // Will be updated after audio upload and AI processing
+                    .title("Analyzing....") // Will be updated after audio upload and AI processing
                     .audioUrl(null) // Will be set after async upload
+                    .thumbnailUrl(defaultConfigService.getDefaultThumbnailUrl())
                     .viewCount(0L)
-                    .status(Story.StoryStatus.PROCESSING)
+                    .status(Story.StoryStatus.UPLOAD_PENDING) // Initial status
                     .contents(new ArrayList<>()) // Will be populated after AI processing
-                    .tags(new ArrayList<>()) // Will be populated after AI processing
-                    .emotions(new ArrayList<>()) // Will be populated after AI processing
                     .rejectionReasons(new ArrayList<>()) // Will be populated if AI processing fails
-                    .metadata(StoryMetadata.builder().build()) // Will be populated after AI processing
                     .build();
             
             Story savedStory = storyRepository.save(story);
-            log.info("Initial story created with ID: {} for user: {} [RequestID: {}]", savedStory.getId(), userId, requestId);
+            String storyId = savedStory.getId();
+            log.info("Initial story created with ID: {} for user: {} [RequestID: {}]", storyId, userId, requestId);
             
-            // Step 3: Start async audio upload and AI processing through separate service
-            // Read file content to avoid temporary file deletion issues
-            byte[] audioFileContent = audioFile.getBytes();
-            String originalFilename = audioFile.getOriginalFilename();
-            String contentType = audioFile.getContentType();
+            // Step 4: Create StoryDataStore with the same ID and UPLOAD_PENDING status
+            StoryDataStore dataStore = StoryDataStore.builder()
+                    .id(storyId)
+                    .storyId(storyId)
+                    .userId(userId)
+                    .language(user.getPreferredStoryLanguage())
+                    .processingStatus(StoryDataStore.ProcessingStatus.UPLOAD_PENDING)
+                    .uploadMetadata(uploadMetadata)
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .build();
             
-            asyncStoryProcessingService.processStoryAsync(savedStory, audioFileContent, originalFilename, contentType, latitude, longitude, requestId);
+            StoryDataStore savedDataStore = storyDataStoreRepository.save(dataStore);
+            log.info("StoryDataStore created with ID: {} for user: {} [RequestID: {}]",
+                    savedDataStore.getId(), userId, requestId);
             
-            User user = userService.getUserEntityById(userId);
             return StoryResponse.fromStory(savedStory, user);
             
         } catch (Exception e) {
@@ -253,7 +299,7 @@ public class StoryService {
      */
     public PagedResponse<StoryResponse> getStoriesByLanguage(String language, String currentUserId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByMetadataLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
         
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -278,7 +324,7 @@ public class StoryService {
      */
     public PagedResponse<StoryResponse> getStoriesByLanguage(String language, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByMetadataLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
         
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -453,7 +499,7 @@ public class StoryService {
         return storyRepository.findById(storyId)
                 .orElseThrow(() -> new RuntimeException("Story not found with ID: " + storyId));
     }
-    
+
     public void incrementViewCount(String storyId) {
         Story story = storyRepository.findById(storyId)
                 .orElseThrow(() -> new RuntimeException("Story not found with ID: " + storyId));
@@ -587,5 +633,86 @@ public class StoryService {
                 .collect(Collectors.toList());
         
         return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+
+    /**
+     * Update StoryMetadata with new information using utility methods
+     * @param existingMetadata Existing metadata (can be null)
+     * @param newLocations New locations to add
+     * @param newNames New names to add
+     * @param newPincodes New pincodes to add
+     * @param newState New state (overwrites if not null)
+     * @param newDistrict New district (overwrites if not null)
+     * @return Updated StoryMetadata
+     */
+    public StoryMetadata updateStoryMetadata(StoryMetadata existingMetadata, 
+                                          List<String> newLocations, 
+                                          List<String> newNames, 
+                                          List<String> newPincodes,
+                                          String newState, 
+                                          String newDistrict) {
+        
+        if (existingMetadata == null) {
+            return StoryMetadata.builder()
+                .locations(ListUtils.addOrCreateStrings(null, newLocations))
+                .names(ListUtils.addOrCreateStrings(null, newNames))
+                .pincodes(ListUtils.addOrCreateStrings(null, newPincodes))
+                .state(newState)
+                .district(newDistrict)
+                .build();
+        }
+        
+        return StoryMetadata.builder()
+            .locations(ListUtils.addOrCreateStrings(existingMetadata.getLocations(), newLocations))
+            .names(ListUtils.addOrCreateStrings(existingMetadata.getNames(), newNames))
+            .pincodes(ListUtils.addOrCreateStrings(existingMetadata.getPincodes(), newPincodes))
+            .state(newState != null ? newState : existingMetadata.getState())
+            .district(newDistrict != null ? newDistrict : existingMetadata.getDistrict())
+            .language(existingMetadata.getLanguage())
+            .deviceInfo(existingMetadata.getDeviceInfo())
+            .build();
+    }
+
+    /**
+     * Search stories
+     */
+    public StorySearchResponse searchStories(StorySearchRequest request, String currentUserId) {
+        return storyDataStoreService.comprehensiveSearch(request, null);
+    }
+
+    /**
+     * Get story processing details
+     */
+    public Map<String, Object> getStoryProcessingDetails(String storyId) {
+        Optional<StoryDataStore> dataStore = storyDataStoreService.getDataStoreByStoryId(storyId);
+        
+        if (dataStore.isEmpty()) {
+            return Map.of("error", "Story not found");
+        }
+        
+        StoryDataStore data = dataStore.get();
+        
+        Map<String, Object> details = new HashMap<>();
+        details.put("storyId", data.getStoryId());
+        details.put("status", data.getProcessingStatus().toString());
+        details.put("createdAt", data.getCreatedAt());
+        details.put("updatedAt", data.getUpdatedAt());
+        details.put("audioUrl", data.getAudioUrl());
+        details.put("duration", data.getDuration());
+        details.put("transcriptionCompletedAt", data.getTranscriptionCompletedAt());
+        details.put("rewriteCompletedAt", data.getRewriteCompletedAt());
+        details.put("paragraphCompletedAt", data.getParagraphCompletedAt());
+        details.put("analysisCompletedAt", data.getAnalysisCompletedAt());
+        details.put("processingStartedAt", data.getProcessingStartedAt());
+        details.put("processingCompletedAt", data.getProcessingCompletedAt());
+        details.put("errors", data.getErrors());
+        details.put("errorMessage", data.getErrorMessage());
+        details.put("transcriptionError", data.getTranscriptionError());
+        details.put("rewriteError", data.getRewriteError());
+        details.put("paragraphError", data.getParagraphError());
+        details.put("analysisError", data.getAnalysisError());
+        details.put("stepErrors", data.getStepErrors());
+        
+        return details;
     }
 } 

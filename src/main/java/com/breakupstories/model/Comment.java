@@ -27,6 +27,12 @@ public class Comment {
     private String text;
     private boolean active = true; // default to true for new comments
     
+    // Abuse detection fields
+    @Builder.Default
+    private boolean isAbusive = false; // default to false for new comments
+    private String category; // category of abuse if detected
+    private String explanation; // explanation of why comment was flagged as abusive
+    
     @CreatedDate
     private LocalDateTime createdAt;
     

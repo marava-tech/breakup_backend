@@ -24,6 +24,11 @@ public class CommentResponse {
     private List<CommentResponse> replies;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    
+    // Abuse detection fields
+    private boolean isAbusive;
+    private String category;
+    private String explanation;
 
     public static CommentResponse fromComment(Comment comment) {
         return CommentResponse.builder()
@@ -32,6 +37,9 @@ public class CommentResponse {
                 .userId(comment.getUserId())
                 .text(comment.getText())
                 .parentId(comment.getParentId())
+                .isAbusive(comment.isAbusive())
+                .category(comment.getCategory())
+                .explanation(comment.getExplanation())
                 .createdAt(comment.getCreatedAt())
                 .updatedAt(comment.getUpdatedAt())
                 .build();
@@ -45,6 +53,9 @@ public class CommentResponse {
                 .username(user != null ? user.getName() : null)
                 .text(comment.getText())
                 .parentId(comment.getParentId())
+                .isAbusive(comment.isAbusive())
+                .category(comment.getCategory())
+                .explanation(comment.getExplanation())
                 .createdAt(comment.getCreatedAt())
                 .updatedAt(comment.getUpdatedAt())
                 .build();

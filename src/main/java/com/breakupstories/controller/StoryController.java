@@ -4,6 +4,8 @@ import com.breakupstories.dto.LikeResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.RequestIdResponse;
 import com.breakupstories.dto.StoryResponse;
+import com.breakupstories.dto.ConsolingMessageRequest;
+import com.breakupstories.dto.ConsolingMessageResponse;
 import com.breakupstories.enums.StorySearchType;
 import com.breakupstories.model.Story;
 import com.breakupstories.model.User;
@@ -12,18 +14,24 @@ import com.breakupstories.service.AuditService;
 import com.breakupstories.service.ClientInfoService;
 import com.breakupstories.service.StoryService;
 import com.breakupstories.service.UserService;
+import com.breakupstories.service.AIService;
+import com.breakupstories.service.StoryDataStoreService;
 import com.breakupstories.util.RequestContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 
+import java.util.HashMap;
 import java.util.Map;
+
+import com.breakupstories.model.StoryDataStore;
 
 @RestController
 @RequestMapping("/api/stories")
@@ -37,6 +45,8 @@ public class StoryController {
     private final AuditService auditService;
     private final ClientInfoService clientInfoService;
     private final StoryRepository storyRepository;
+    private final AIService aiService;
+    private final StoryDataStoreService storyDataStoreService;
     
     @PostMapping
     @Operation(summary = "Create a new story", description = "Upload a new story with content, tags, and metadata")
@@ -51,6 +61,14 @@ public class StoryController {
         String latitude = request.getHeader("X-Latitude");
         String longitude = request.getHeader("X-Longitude");
         
+        // Extract device info from request
+        ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
+        String deviceInfo = clientInfo.getUserAgent(); // Use User-Agent as device info
+
+        Map<String,String> uploadMetadata = new HashMap<>();
+        uploadMetadata.put("lat",latitude);
+        uploadMetadata.put("long",longitude);
+        uploadMetadata.put("deviceInfo",deviceInfo);
         if (latitude != null && longitude != null) {
             log.info("Location coordinates received [RequestID: {}] - lat: {}, lng: {}", requestId, latitude, longitude);
         } else {
@@ -60,9 +78,9 @@ public class StoryController {
         //request contains a audio file.
         
         String email = authentication.getName();
-        String userId = userService.getUserEntityByEmail(email).getId();
-        
-        StoryResponse response = storyService.createStory(userId, request, latitude, longitude);
+        User user = userService.getUserEntityByEmail(email);
+        if(ObjectUtils.isEmpty(user)) throw new RuntimeException("user not logged in");
+        StoryResponse response = storyService.createStory(user, request, uploadMetadata);
         
         RequestIdResponse<StoryResponse> requestIdResponse = RequestIdResponse.of(response, "Story creation initiated successfully");
         log.info("Story creation response sent [RequestID: {}]", requestId);
@@ -329,19 +347,68 @@ public class StoryController {
         }
     }
 
-
-    @GetMapping("/console")
-    @Operation(summary = "console person by story", description = "console person by story)")
-    public ResponseEntity<Map<String,String>> console(
-            @RequestParam String storyId,
-            @RequestParam String consolePersonType,
+    @GetMapping("/{storyId}/consoling-message")
+    @Operation(summary = "Generate consoling message for story", description = "Generate a consoling message for a story using story ID and console_by parameter")
+    public ResponseEntity<ConsolingMessageResponse> generateConsolingMessageForStory(
+            @PathVariable String storyId,
+            @RequestParam String consoleBy,
             Authentication authentication) {
+        
+        log.info("Generating consoling message for story: {} with consoleBy: {}", storyId, consoleBy);
+        
         try {
-            Map<String,String> consoleResponse =  Map.of("consoleMessage","this is a long console message for story id "+storyId+" consoling as as "+consolePersonType);
-            return ResponseEntity.ok(consoleResponse);
+            // Get current user from authentication
+            String email = authentication.getName();
+            User currentUser = userService.getUserEntityByEmail(email);
+            
+            // Get story data store to extract transcription and language
+            StoryDataStore dataStore = storyDataStoreService.getDataStoreByStoryId(storyId)
+                    .orElseThrow(() -> new RuntimeException("Story data store not found for story ID: " + storyId));
+            
+            // Extract transcription from StoryDataStore
+            String story = null;
+            if (dataStore.getTranscriptionResponse() != null && dataStore.getTranscriptionResponse().getTranscript() != null) {
+                story = dataStore.getTranscriptionResponse().getTranscript();
+            } else if (dataStore.getStoryRewriteResponse() != null && dataStore.getStoryRewriteResponse().getRewrittenStory() != null) {
+                story = dataStore.getStoryRewriteResponse().getRewrittenStory();
+            } else {
+                throw new RuntimeException("No story content available for story ID: " + storyId);
+            }
+            
+            // Get language from StoryDataStore
+            String language = dataStore.getLanguage();
+            if (language == null || language.trim().isEmpty()) {
+                language = "en"; // Default to English if not available
+            }
+            
+            // Get user gender and age
+            String gender = currentUser.getGender() != null ? currentUser.getGender().toString().toLowerCase() : "unknown";
+            Integer age = currentUser.getAge();
+            if (age == null) {
+                age = 25; // Default age if not available
+            }
+            
+            log.info("Extracted data for consoling message - Language: {}, Gender: {}, Age: {}, ConsoleBy: {}", 
+                    language, gender, age, consoleBy);
+            
+            // Generate consoling message using AI service
+            ConsolingMessageResponse response = aiService.generateConsolingMessage(story, language, gender, age, consoleBy);
+            
+            log.info("Consoling message generated successfully for story: {}", storyId);
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            log.warn("Error generating consoling message: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            log.error("Error generating consoling message for story {}: {}", storyId, e.getMessage(), e);
+            
+            ConsolingMessageResponse errorResponse = ConsolingMessageResponse.builder()
+                    .success(false)
+                    .consolingMessage(null)
+                    .language("en")
+                    .consoleBy(consoleBy)
+                    .error("Failed to generate consoling message: " + e.getMessage())
+                    .build();
+            
+            return ResponseEntity.status(500).body(errorResponse);
         }
     }
 } 

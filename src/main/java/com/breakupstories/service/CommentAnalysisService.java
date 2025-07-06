@@ -1,9 +1,13 @@
 package com.breakupstories.service;
 
+import com.breakupstories.dto.AbuseDetectionResponse;
 import com.breakupstories.model.Comment;
 import com.breakupstories.repository.CommentRepository;
+import com.breakupstories.repository.UserRepository;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +23,8 @@ import java.util.List;
 public class CommentAnalysisService {
     
     private final CommentRepository commentRepository;
-    private final MockAIService mockAIService;
+    private final AIService aiService;
+    private final UserRepository userRepository;
     
     /**
      * Scheduled task to analyze comments every 10 minutes
@@ -49,21 +54,13 @@ public class CommentAnalysisService {
             // Analyze each comment
             for (Comment comment : recentComments) {
                 try {
-                    boolean isPositive = mockAIService.analyzeComment(comment.getText());
-                    
-                    if (!isPositive) {
-                        // Mark comment as inactive if it's negative/hateful
-                        comment.setActive(false);
-                        commentRepository.save(comment);
-                        flaggedCount++;
-                        
-                        log.warn("Flagged negative comment - ID: {}, Text: '{}'", 
-                                comment.getId(), 
-                                comment.getText().substring(0, Math.min(50, comment.getText().length())));
-                    }
-                    
-                    processedCount++;
-                    
+                    var user = userRepository.findById(comment.getUserId()).orElse(null);
+                    if(ObjectUtils.isEmpty(user)) continue;;
+                    var abuseDetectionResponse = aiService.detectAbuse(comment.getText(),user.getPreferredStoryLanguage());
+                    comment.setAbusive(abuseDetectionResponse.getIs_abusive());
+                    comment.setExplanation(abuseDetectionResponse.getExplanation());
+                    comment.setCategory(abuseDetectionResponse.getCategory());
+                    commentRepository.save(comment);
                 } catch (Exception e) {
                     log.error("Error analyzing comment {}: {}", comment.getId(), e.getMessage(), e);
                     // Continue with next comment even if one fails
@@ -82,23 +79,12 @@ public class CommentAnalysisService {
      * @param commentId The ID of the comment to analyze
      * @return true if comment is positive, false if negative
      */
-    public boolean analyzeComment(String commentId) {
+    public AbuseDetectionResponse analyzeComment(String commentId) {
         try {
             Comment comment = commentRepository.findById(commentId)
                     .orElseThrow(() -> new RuntimeException("Comment not found: " + commentId));
-            
-            boolean isPositive = mockAIService.analyzeComment(comment.getText());
-            
-            if (!isPositive) {
-                comment.setActive(false);
-                commentRepository.save(comment);
-                log.warn("Manually flagged negative comment - ID: {}, Text: '{}'", 
-                        comment.getId(), 
-                        comment.getText().substring(0, Math.min(50, comment.getText().length())));
-            }
-            
-            return isPositive;
-            
+          var user = userRepository.findById(comment.getUserId()).orElseThrow(() -> new RuntimeException("user not found"));
+            return aiService.detectAbuse(comment.getText(),user.getPreferredStoryLanguage());
         } catch (Exception e) {
             log.error("Error analyzing comment {}: {}", commentId, e.getMessage(), e);
             throw new RuntimeException("Failed to analyze comment", e);
@@ -128,7 +114,9 @@ public class CommentAnalysisService {
     /**
      * Statistics class for comment analysis
      */
+    @Getter
     public static class CommentAnalysisStats {
+        // Getters
         private long totalComments;
         private long activeComments;
         private long inactiveComments;
@@ -140,7 +128,7 @@ public class CommentAnalysisService {
         }
         
         public static class CommentAnalysisStatsBuilder {
-            private CommentAnalysisStats stats = new CommentAnalysisStats();
+            private final CommentAnalysisStats stats = new CommentAnalysisStats();
             
             public CommentAnalysisStatsBuilder totalComments(long totalComments) {
                 stats.totalComments = totalComments;
@@ -166,11 +154,6 @@ public class CommentAnalysisService {
                 return stats;
             }
         }
-        
-        // Getters
-        public long getTotalComments() { return totalComments; }
-        public long getActiveComments() { return activeComments; }
-        public long getInactiveComments() { return inactiveComments; }
-        public LocalDateTime getAnalysisTime() { return analysisTime; }
+
     }
 } 

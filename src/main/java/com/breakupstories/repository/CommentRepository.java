@@ -48,4 +48,23 @@ public interface CommentRepository extends MongoRepository<Comment, String> {
     // Count comments for all stories by a user
     @Query("{'storyId': { $in: ?0 }}")
     long countByStoryUserId(String userId);
+    
+    // Abuse detection related methods
+    Page<Comment> findByIsAbusiveTrue(Pageable pageable);
+    
+    Page<Comment> findByIsAbusiveTrueAndActiveTrue(Pageable pageable);
+    
+    List<Comment> findByIsAbusiveTrueAndActiveTrue();
+    
+    Page<Comment> findByCategoryAndActiveTrue(String category, Pageable pageable);
+    
+    List<Comment> findByCategoryAndActiveTrue(String category);
+    
+    long countByIsAbusiveTrue();
+    
+    long countByIsAbusiveTrueAndActiveTrue();
+    
+    long countByCategoryAndActiveTrue(String category);
+    
+    long countByActiveTrue();
 } 

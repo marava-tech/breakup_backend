@@ -1,5 +1,6 @@
 package com.breakupstories.controller;
 
+import com.breakupstories.dto.AbuseDetectionResponse;
 import com.breakupstories.service.CommentAnalysisService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,31 +25,9 @@ public class CommentAnalysisController {
     @PostMapping("/analyze/{commentId}")
     @PreAuthorize("hasAuthority('ADMIN')")
     @Operation(summary = "Manually analyze a specific comment", description = "Analyze a comment using AI and flag if negative/hateful")
-    public ResponseEntity<Map<String, Object>> analyzeComment(@PathVariable String commentId) {
+    public ResponseEntity<AbuseDetectionResponse> analyzeComment(@PathVariable String commentId) {
         log.info("Manual comment analysis requested for comment: {}", commentId);
-        
-        try {
-            boolean isPositive = commentAnalysisService.analyzeComment(commentId);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("commentId", commentId);
-            response.put("isPositive", isPositive);
-            response.put("status", isPositive ? "APPROVED" : "FLAGGED");
-            response.put("message", isPositive ? "Comment is positive" : "Comment flagged as negative/hateful");
-            
-            log.info("Comment analysis completed for {}: {}", commentId, isPositive ? "POSITIVE" : "NEGATIVE");
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            log.error("Error analyzing comment {}: {}", commentId, e.getMessage(), e);
-            
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("commentId", commentId);
-            errorResponse.put("error", e.getMessage());
-            errorResponse.put("status", "ERROR");
-            
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+            return ResponseEntity.ok( commentAnalysisService.analyzeComment(commentId));
     }
     
     @GetMapping("/stats")
@@ -56,15 +35,8 @@ public class CommentAnalysisController {
     @Operation(summary = "Get comment analysis statistics", description = "Get statistics about recent comment analysis")
     public ResponseEntity<CommentAnalysisService.CommentAnalysisStats> getAnalysisStats() {
         log.info("Comment analysis statistics requested");
-        
-        try {
             CommentAnalysisService.CommentAnalysisStats stats = commentAnalysisService.getAnalysisStats();
             return ResponseEntity.ok(stats);
-            
-        } catch (Exception e) {
-            log.error("Error getting analysis stats: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().build();
-        }
     }
     
     @PostMapping("/trigger-analysis")

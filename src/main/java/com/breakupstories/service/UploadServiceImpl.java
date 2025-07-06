@@ -192,7 +192,7 @@ public class UploadServiceImpl implements UploadService {
 
                 } else if (contentType.startsWith("audio/")) {
                     uploadOptions.put("resource_type", "video"); // Cloudinary uses 'video' for audio
-                    uploadOptions.put("format", "mp3");
+                    // Don't force MP3 format - let Cloudinary handle the original format
                     uploadOptions.put("quality", "auto:low"); // Aggressive compression
 
                     // Simplified audio transformation
@@ -200,6 +200,10 @@ public class UploadServiceImpl implements UploadService {
                             .quality("auto:low");
 
                     uploadOptions.put("transformation", audioTransformation);
+                    
+                    // Add better error handling for audio files
+                    uploadOptions.put("invalidate", true);
+                    uploadOptions.put("overwrite", true);
 
                 } else {
                     uploadOptions.put("resource_type", "raw");
@@ -210,18 +214,16 @@ public class UploadServiceImpl implements UploadService {
             if (originalFilename != null) {
                 // Split filename into base and extension
                 String baseName = originalFilename;
-                String extension = "";
                 int lastDotIndex = originalFilename.lastIndexOf('.');
                 if (lastDotIndex > 0 && lastDotIndex < originalFilename.length() - 1) {
                     baseName = originalFilename.substring(0, lastDotIndex);
-                    extension = originalFilename.substring(lastDotIndex); // includes the dot
                 }
                 // Clean up the base name by replacing invalid characters
                 baseName = baseName.replaceAll("[^a-zA-Z0-9.-]", "_");
-                // Generate UUID
-                String uuid = UUID.randomUUID().toString()+extension;
-                // Construct new filename
-                String publicId = baseName + "-" + uuid ;
+                // Generate UUID without extension (Cloudinary will add the appropriate extension)
+                String uuid = UUID.randomUUID().toString();
+                // Construct new filename without extension
+                String publicId = baseName + "-" + uuid;
                 uploadOptions.put("public_id", publicId);
             }
 
@@ -245,10 +247,27 @@ public class UploadServiceImpl implements UploadService {
 
             } catch (Exception e) {
                 log.error("Cloudinary upload failed for {} with options: {}", originalFilename, uploadOptions, e);
-                throw e;
+                
+                // Provide more specific error messages
+                String errorMessage = e.getMessage();
+                if (errorMessage != null) {
+                    if (errorMessage.contains("Unsupported video format")) {
+                        log.error("Audio file format not supported by Cloudinary. File: {}, Content-Type: {}", 
+                                originalFilename, contentType);
+                        throw new FileUploadException("Audio file format not supported. Please use MP3, WAV, or other common audio formats.");
+                    } else if (errorMessage.contains("Invalid file")) {
+                        log.error("Invalid audio file. File: {}, Size: {} bytes", originalFilename, file.getSize());
+                        throw new FileUploadException("Invalid audio file. Please check the file format and try again.");
+                    } else if (errorMessage.contains("File too large")) {
+                        log.error("Audio file too large. File: {}, Size: {} bytes", originalFilename, file.getSize());
+                        throw new FileUploadException("Audio file too large. Please use a smaller file.");
+                    }
+                }
+                
+                throw new FileUploadException("Failed to upload audio file: " + errorMessage, e);
             }
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Error uploading file: {}", file.getOriginalFilename(), e);
             throw new FileUploadException("Error uploading file: " + file.getOriginalFilename(), e);
         }
