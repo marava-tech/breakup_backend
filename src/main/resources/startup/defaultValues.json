@@ -57,5 +57,17 @@
     "value": "60",
     "description": "Default points for giving 5 feedbacks(bugs/feature request) and they are in resolved state",
     "active": true
+  },
+  {
+    "key": "first_story_5min_reward_coins",
+    "value": "90",
+    "description": "Reward coins for first story that is 5+ minutes long and active",
+    "active": true
+  },
+  {
+    "key": "first_story_min_duration_minutes",
+    "value": "5",
+    "description": "Minimum duration in minutes for first story reward",
+    "active": true
   }
 ]

@@ -32,6 +32,7 @@ public class StoryConversionWorker {
     private final StoryRepository storyRepository;
     private final StoryStatusService storyStatusService;
     private final DefaultConfigService defaultConfigService;
+    private final FirstStoryRewardService firstStoryRewardService;
     
     /**
      * Process conversions every 5 minutes
@@ -181,6 +182,12 @@ public class StoryConversionWorker {
             
             // Save the Story entity
             Story savedStory = storyRepository.save(story);
+            
+            // Check for first story reward
+            boolean rewardGiven = firstStoryRewardService.checkAndRewardFirstStory(dataStore.getUserId(), dataStore.getStoryId());
+            if (rewardGiven) {
+                log.info("First story reward check completed for story: {} (Request ID: {})", dataStore.getId(), requestId);
+            }
             
             log.info("Successfully created Story from StoryDataStore for story: {} (Request ID: {})", dataStore.getId(), requestId);
             
@@ -335,6 +342,9 @@ public class StoryConversionWorker {
             
             // Update status to REJECTED using StoryStatusService
             storyStatusService.updateStatusInBothCollections(dataStore.getStoryId(), Story.StoryStatus.REJECTED);
+            
+            // Save the Story entity
+            Story savedStory = storyRepository.save(story);
             
             log.info("Successfully converted failed story: {} to final Story entity with rejection reasons (Request ID: {})", dataStore.getId(), requestId);
             

@@ -240,4 +240,38 @@ public class DefaultConfigService {
             return "";
         }
     }
+    
+    /**
+     * Get first story reward coins from configuration
+     * @return First story reward coins
+     */
+    public int getFirstStoryRewardCoins() {
+        try {
+            DefaultConfig config = defaultConfigRepository.findByKey("first_story_5min_reward_coins")
+                    .orElseThrow(() -> new RuntimeException("First story reward coins configuration not found"));
+            
+            return Integer.parseInt(config.getValue());
+        } catch (Exception e) {
+            // Return default value if configuration is not found
+            log.warn("First story reward coins not found in configuration, using default value", e);
+            return 90;
+        }
+    }
+    
+    /**
+     * Get minimum duration in minutes for first story reward from configuration
+     * @return Minimum duration in minutes
+     */
+    public int getFirstStoryMinDurationMinutes() {
+        try {
+            DefaultConfig config = defaultConfigRepository.findByKey("first_story_min_duration_minutes")
+                    .orElseThrow(() -> new RuntimeException("First story min duration configuration not found"));
+            
+            return Integer.parseInt(config.getValue());
+        } catch (Exception e) {
+            // Return default value if configuration is not found
+            log.warn("First story min duration not found in configuration, using default value", e);
+            return 5;
+        }
+    }
 } 

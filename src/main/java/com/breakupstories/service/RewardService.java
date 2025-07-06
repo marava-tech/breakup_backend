@@ -270,6 +270,10 @@ public class RewardService {
                 defaultConfigService.getByKey("default_1000_views_points").getValue());
             rewardConfigs.put("feedbackProReward", 
                 defaultConfigService.getByKey("5_feedbacks_points").getValue());
+            rewardConfigs.put("firstStoryReward", 
+                defaultConfigService.getByKey("first_story_5min_reward_coins").getValue());
+            rewardConfigs.put("firstStoryMinDuration", 
+                defaultConfigService.getByKey("first_story_min_duration_minutes").getValue());
             
             // Referral configurations
             referralConfigs.put("referrerReward", 
@@ -291,6 +295,8 @@ public class RewardService {
             rewardConfigs.put("hundredLikesMilestone", "15");
             rewardConfigs.put("thousandViewsMilestone", "15");
             rewardConfigs.put("feedbackProReward", "60");
+            rewardConfigs.put("firstStoryReward", "90");
+            rewardConfigs.put("firstStoryMinDuration", "5");
             referralConfigs.put("referrerReward", "50");
             referralConfigs.put("referredUserWelcomeBonus", "30");
             referralConfigs.put("maxReferralsPerUser", "100");
