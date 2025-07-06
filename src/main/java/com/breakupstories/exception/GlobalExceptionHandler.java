@@ -29,6 +29,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message(ex.getMessage())
                         .error("Resource Not Found")
+                        .service("Resource")
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
@@ -40,6 +41,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message(ex.getMessage())
                         .error("Resource Already Exists")
+                        .service("Resource")
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
@@ -51,6 +53,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message(ex.getMessage())
                         .error("Invalid OTP")
+                        .service("Auth")
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
@@ -62,6 +65,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message(ex.getMessage())
                         .error("Email Send Error")
+                        .service("Email")
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
@@ -73,6 +77,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message("Access denied")
                         .error("Forbidden")
+                        .service("Security")
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
@@ -84,26 +89,20 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message("Invalid credentials")
                         .error("Unauthorized")
+                        .service("Auth")
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        Map<String, String> fieldErrors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            fieldErrors.put(fieldName, errorMessage);
-        });
-        
-        log.error("Validation error: {}", fieldErrors);
+        log.error("Validation error: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.builder()
                         .message("Validation failed")
                         .error("Validation Error")
+                        .service("Validation")
                         .timestamp(System.currentTimeMillis())
-                        .fieldErrors(fieldErrors)
                         .build());
     }
 
@@ -114,6 +113,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message("Invalid request body")
                         .error("Bad Request")
+                        .service("Request Body")
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
@@ -123,10 +123,10 @@ public class GlobalExceptionHandler {
         log.error("Argument type mismatch: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.builder()
-                        .message("Invalid parameter type")
+                        .message("Invalid parameter type: " + ex.getName())
                         .error("Bad Request")
+                        .service("Validation")
                         .timestamp(System.currentTimeMillis())
-                        .description("The parameter '" + ex.getName() + "' has an invalid type")
                         .build());
     }
 
@@ -137,8 +137,8 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message("Endpoint not found")
                         .error("Not Found")
+                        .service("Routing")
                         .timestamp(System.currentTimeMillis())
-                        .description("The requested endpoint does not exist")
                         .build());
     }
 
@@ -149,8 +149,8 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message("Data integrity violation")
                         .error("Conflict")
+                        .service("Database")
                         .timestamp(System.currentTimeMillis())
-                        .description("The operation would violate data integrity constraints")
                         .build());
     }
 
@@ -159,10 +159,10 @@ public class GlobalExceptionHandler {
         log.error("Illegal argument: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.builder()
-                        .message("Invalid argument")
+                        .message("Invalid argument: " + ex.getMessage())
                         .error("Bad Request")
+                        .service("Validation")
                         .timestamp(System.currentTimeMillis())
-                        .description(ex.getMessage())
                         .build());
     }
 
@@ -173,6 +173,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message(ex.getMessage())
                         .error("Exception")
+                        .service("Runtime")
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
@@ -184,8 +185,8 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message("An unexpected error occurred")
                         .error("Internal Server Error")
+                        .service("Unknown")
                         .timestamp(System.currentTimeMillis())
-                        .description("Please try again later or contact support if the problem persists")
                         .build());
     }
 
@@ -196,6 +197,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message(ex.getMessage())
                         .error("File Upload Error")
+                        .service("File Upload")
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
@@ -207,8 +209,8 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message("Uploaded file exceeds maximum allowed size")
                         .error("File Too Large")
+                        .service("File Upload")
                         .timestamp(System.currentTimeMillis())
-                        .description("Maximum file size is 50MB")
                         .build());
     }
     
@@ -219,8 +221,8 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .message("Database operation failed")
                         .error("Database Error")
+                        .service("Database")
                         .timestamp(System.currentTimeMillis())
-                        .description("Unable to process request due to database error")
                         .build());
     }
 } 

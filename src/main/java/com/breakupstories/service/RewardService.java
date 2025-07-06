@@ -9,7 +9,6 @@ import com.breakupstories.repository.CoinHistoryRepository;
 import com.breakupstories.repository.StoryRepository;
 import com.breakupstories.repository.UserRepository;
 import com.breakupstories.repository.FeedbackRepository;
-import com.breakupstories.service.DefaultConfigService;
 import com.breakupstories.util.ApplicationContextProvider;
 import com.breakupstories.dto.RewardConfigResponse;
 import com.breakupstories.model.Feedback;
@@ -36,7 +35,7 @@ public class RewardService {
 
     private static final int LIKES_MILESTONE = 100;
     private static final int VIEWS_MILESTONE = 1000;
-    private static final long STORY_DURATION_THRESHOLD = 600000; // 10 minutes in milliseconds
+    private static final long STORY_DURATION_THRESHOLD = 300000; // 5 minutes in milliseconds
     
     /**
      * Get total coins for a user by calculating from history

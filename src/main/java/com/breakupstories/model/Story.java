@@ -10,7 +10,6 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -27,7 +26,8 @@ public class Story {
     private String title;
     private String audioUrl;
     private String thumbnailUrl;
-    private Long viewCount;
+    @Builder.Default
+    private Long viewCount=0L;
     private Long duration; // Duration in milliseconds
     private StoryStatus status;
     
@@ -43,9 +43,9 @@ public class Story {
 
     private List<String> rejectionReasons;
 
-    private StoryMetadata metadata;
+    private String language;
     
     public enum StoryStatus {
-        PROCESSING, ACTIVE, REJECTED
+        UPLOAD_PENDING, UPLOADING, PROCESSING_PENDING, PROCESSING, PROCESSED, CONVERTING, ACTIVE, INACTIVE, FAILED, REJECTED
     }
 } 

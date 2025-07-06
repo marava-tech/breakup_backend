@@ -144,4 +144,51 @@ public class CommentController {
         PagedResponse<CommentResponse> response = commentService.getCommentsByUser(userId, page, size);
         return ResponseEntity.ok(response);
     }
+    
+    @GetMapping("/abusive")
+    @Operation(summary = "Get abusive comments", description = "Get paginated abusive comments for moderation")
+    public ResponseEntity<PagedResponse<CommentResponse>> getAbusiveComments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        
+        PagedResponse<CommentResponse> response = commentService.getAbusiveComments(page, size);
+        return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/abusive/category/{category}")
+    @Operation(summary = "Get comments by abuse category", description = "Get paginated comments by specific abuse category")
+    public ResponseEntity<PagedResponse<CommentResponse>> getCommentsByAbuseCategory(
+            @PathVariable String category,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        
+        PagedResponse<CommentResponse> response = commentService.getCommentsByAbuseCategory(category, page, size);
+        return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/abusive/statistics")
+    @Operation(summary = "Get abuse statistics", description = "Get statistics about abusive comments")
+    public ResponseEntity<java.util.Map<String, Object>> getAbuseStatistics() {
+        java.util.Map<String, Object> stats = commentService.getAbuseStatistics();
+        return ResponseEntity.ok(stats);
+    }
+    
+    @PostMapping("/{commentId}/flag")
+    @Operation(summary = "Flag comment as abusive", description = "Manually flag a comment as abusive (admin/moderator only)")
+    public ResponseEntity<Void> flagCommentAsAbusive(
+            @PathVariable String commentId,
+            @RequestParam String category,
+            @RequestParam String explanation) {
+        
+        commentService.flagCommentAsAbusive(commentId, category, explanation);
+        return ResponseEntity.ok().build();
+    }
+    
+    @PostMapping("/{commentId}/unflag")
+    @Operation(summary = "Unflag comment as abusive", description = "Manually unflag a comment as abusive (admin/moderator only)")
+    public ResponseEntity<Void> unflagCommentAsAbusive(@PathVariable String commentId) {
+        
+        commentService.unflagCommentAsAbusive(commentId);
+        return ResponseEntity.ok().build();
+    }
 } 

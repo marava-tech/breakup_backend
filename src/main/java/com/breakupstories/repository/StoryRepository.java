@@ -17,15 +17,19 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     
     Page<Story> findByStatus(Story.StoryStatus status, Pageable pageable);
     
+    List<Story> findByStatus(Story.StoryStatus status);
+    
+    // New method with limit and ordering by createdAt (ascending - oldest first)
+    @Query(value = "{'status': ?0}", sort = "{'createdAt': 1}")
+    List<Story> findByStatusOrderByCreatedAtAscLimit(Story.StoryStatus status, int limit);
+    
     Page<Story> findByStatusOrderByViewCountDesc(Story.StoryStatus status, Pageable pageable);
     
     Page<Story> findByStatusOrderByCreatedAtDesc(Story.StoryStatus status, Pageable pageable);
     
-    Page<Story> findByMetadataLanguageAndStatus(String language, Story.StoryStatus status, Pageable pageable);
+    Page<Story> findByLanguageAndStatus(String language, Story.StoryStatus status, Pageable pageable);
     
-    List<Story> findByTagsContaining(String tag);
-    
-    Page<Story> findByTagsContaining(String tag, Pageable pageable);
+
     
     // Custom query for filtering stories with multiple criteria
     @Query("{'status': 'ACTIVE', " +
@@ -63,4 +67,15 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     
     // Find stories by user ID with null audioUrl ordered by createdAt desc
     List<Story> findByUserIdAndAudioUrlIsNullOrderByCreatedAtDesc(String userId);
+    
+    // Method specifically for UPLOAD_PENDING stories with limit (ascending - oldest first)
+    @Query(value = "{'status': 'UPLOAD_PENDING'}", sort = "{'createdAt': 1}")
+    List<Story> findUploadPendingStoriesOrderByCreatedAtAscLimit(int limit);
+    
+    // Find stories by tags (any tag in the list)
+    List<Story> findByTagsIn(List<String> tags);
+    
+    // Find stories by tags (all tags must be present)
+    @Query("{'tags': {$all: ?0}}")
+    List<Story> findByTagsContainingAll(List<String> tags);
 } 

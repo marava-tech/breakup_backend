@@ -27,9 +27,30 @@ public class CommentService {
     private final CommentRepository commentRepository;
     @Lazy
     private final UserService userService;
+    private final AIService aiService;
     
     public CommentResponse createComment(String userId, CommentRequest request) {
         log.info("User {} creating comment on story {}", userId, request.getStoryId());
+        
+        // Perform abuse detection on the comment text
+        boolean isAbusive = false;
+        String category = null;
+        String explanation = null;
+        
+        try {
+            log.info("Performing abuse detection on comment text");
+            var abuseDetectionResponse = aiService.detectAbuse(request.getText(), "en");
+            isAbusive = abuseDetectionResponse.getIs_abusive();
+            category = abuseDetectionResponse.getCategory();
+            explanation = abuseDetectionResponse.getExplanation();
+            
+            log.info("Abuse detection completed - Is Abusive: {}, Category: {}, Confidence: {}", 
+                    isAbusive, category, abuseDetectionResponse.getConfidence());
+        } catch (Exception e) {
+            log.error("Error performing abuse detection on comment: {}", e.getMessage(), e);
+            // Continue with comment creation even if abuse detection fails
+            // Default values will be used (isAbusive = false, category = null, explanation = null)
+        }
         
         Comment comment = Comment.builder()
                 .storyId(request.getStoryId())
@@ -37,10 +58,13 @@ public class CommentService {
                 .text(request.getText())
                 .active(true)
                 .parentId(request.getParentId())
+                .isAbusive(isAbusive)
+                .category(category)
+                .explanation(explanation)
                 .build();
         
         Comment savedComment = commentRepository.save(comment);
-        log.info("Comment created with ID: {}", savedComment.getId());
+        log.info("Comment created with ID: {} (Abusive: {})", savedComment.getId(), isAbusive);
         
         // Fetch user information to include username
         User user = userService.getUserEntityById(userId);
@@ -171,10 +195,36 @@ public class CommentService {
             throw new RuntimeException("You can only update your own comments");
         }
         
+        // Perform abuse detection on the updated comment text
+        boolean isAbusive = false;
+        String category = null;
+        String explanation = null;
+        
+        try {
+            log.info("Performing abuse detection on updated comment text");
+            var abuseDetectionResponse = aiService.detectAbuse(request.getText(), "en");
+            isAbusive = abuseDetectionResponse.getIs_abusive();
+            category = abuseDetectionResponse.getCategory();
+            explanation = abuseDetectionResponse.getExplanation();
+            
+            log.info("Abuse detection completed for updated comment - Is Abusive: {}, Category: {}, Confidence: {}", 
+                    isAbusive, category, abuseDetectionResponse.getConfidence());
+        } catch (Exception e) {
+            log.error("Error performing abuse detection on updated comment: {}", e.getMessage(), e);
+            // Continue with comment update even if abuse detection fails
+            // Keep existing abuse detection values
+            isAbusive = comment.isAbusive();
+            category = comment.getCategory();
+            explanation = comment.getExplanation();
+        }
+        
         comment.setText(request.getText());
+        comment.setAbusive(isAbusive);
+        comment.setCategory(category);
+        comment.setExplanation(explanation);
         
         Comment updatedComment = commentRepository.save(comment);
-        log.info("Comment {} updated successfully", commentId);
+        log.info("Comment {} updated successfully (Abusive: {})", commentId, isAbusive);
         
         // Fetch user information to include username
         User user = userService.getUserEntityById(userId);
@@ -213,5 +263,106 @@ public class CommentService {
         
         // Delete the comment itself
         commentRepository.deleteById(commentId);
+    }
+    
+    /**
+     * Get all abusive comments (for moderation purposes)
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of abusive comments
+     */
+    public PagedResponse<CommentResponse> getAbusiveComments(int page, int size) {
+        log.info("Getting abusive comments (page: {}, size: {})", page, size);
+        
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Comment> commentPage = commentRepository.findByIsAbusiveTrueAndActiveTrue(pageable);
+        
+        List<CommentResponse> comments = commentPage.getContent().stream()
+                .map(comment -> {
+                    User user = userService.getUserEntityById(comment.getUserId());
+                    return CommentResponse.fromComment(comment, user);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(comments, page, size, commentPage.getTotalElements());
+    }
+    
+    /**
+     * Get comments by abuse category
+     * @param category The abuse category
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of comments in the specified category
+     */
+    public PagedResponse<CommentResponse> getCommentsByAbuseCategory(String category, int page, int size) {
+        log.info("Getting comments by abuse category: {} (page: {}, size: {})", category, page, size);
+        
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Comment> commentPage = commentRepository.findByCategoryAndActiveTrue(category, pageable);
+        
+        List<CommentResponse> comments = commentPage.getContent().stream()
+                .map(comment -> {
+                    User user = userService.getUserEntityById(comment.getUserId());
+                    return CommentResponse.fromComment(comment, user);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(comments, page, size, commentPage.getTotalElements());
+    }
+    
+    /**
+     * Get abuse statistics
+     * @return Map containing abuse statistics
+     */
+    public Map<String, Object> getAbuseStatistics() {
+        log.info("Getting abuse statistics");
+        
+        long totalAbusiveComments = commentRepository.countByIsAbusiveTrueAndActiveTrue();
+        long totalComments = commentRepository.countByActiveTrue();
+        
+        Map<String, Object> stats = new java.util.HashMap<>();
+        stats.put("totalAbusiveComments", totalAbusiveComments);
+        stats.put("totalComments", totalComments);
+        stats.put("abusePercentage", totalComments > 0 ? (double) totalAbusiveComments / totalComments * 100 : 0);
+        
+        return stats;
+    }
+    
+    /**
+     * Manually flag a comment as abusive (for admin/moderator use)
+     * @param commentId The comment ID
+     * @param category The abuse category
+     * @param explanation The explanation for flagging
+     */
+    public void flagCommentAsAbusive(String commentId, String category, String explanation) {
+        log.info("Manually flagging comment {} as abusive", commentId);
+        
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new RuntimeException("Comment not found with ID: " + commentId));
+        
+        comment.setAbusive(true);
+        comment.setCategory(category);
+        comment.setExplanation(explanation);
+        
+        commentRepository.save(comment);
+        log.info("Comment {} flagged as abusive with category: {}", commentId, category);
+    }
+    
+    /**
+     * Manually unflag a comment as abusive (for admin/moderator use)
+     * @param commentId The comment ID
+     */
+    public void unflagCommentAsAbusive(String commentId) {
+        log.info("Manually unflagging comment {} as abusive", commentId);
+        
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new RuntimeException("Comment not found with ID: " + commentId));
+        
+        comment.setAbusive(false);
+        comment.setCategory(null);
+        comment.setExplanation(null);
+        
+        commentRepository.save(comment);
+        log.info("Comment {} unflagged as abusive", commentId);
     }
 } 
