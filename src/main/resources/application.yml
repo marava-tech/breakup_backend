@@ -89,7 +89,7 @@ ai:
   service:
     provider: real  # Change to "real" to use actual AI service
     enabled: true
-    base-url: http://breakupai.marava.tech # Replace with your AI service URL
+    base-url: http://breakup-ai-server:8000 # Replace with your AI service URL
     api-key: ${AI_SERVICE_API_KEY:your-api-key-here}
     timeout: 30000
     max-retries: 3

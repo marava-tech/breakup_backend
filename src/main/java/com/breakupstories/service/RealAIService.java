@@ -34,7 +34,7 @@ public class RealAIService implements AIService {
     
     private final RestTemplate restTemplate;
     
-    @Value("${ai.service.base-url-local:http://localhost:8000}")
+    @Value("${ai.service.base-url:http://localhost:8000}")
     private String aiServiceBaseUrl;
 
 
