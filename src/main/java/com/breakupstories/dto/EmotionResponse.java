@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class EmotionResponse {
     private String id;
-    private Emotion.EmotionType type;
+    private String type;
     private Double score;
 
     public static EmotionResponse fromEmotion(Emotion emotion) {

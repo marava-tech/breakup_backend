@@ -14,7 +14,7 @@ import jakarta.validation.constraints.NotNull;
 @AllArgsConstructor
 public class EmotionRequest {
     @NotNull(message = "Emotion type is required")
-    private Emotion.EmotionType type;
+    private String type;
     @NotNull(message = "Score is required")
     private Double score;
 } 

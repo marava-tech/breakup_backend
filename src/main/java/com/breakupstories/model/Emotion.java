@@ -15,10 +15,6 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class Emotion {
     @Id
     private String id;
-    private EmotionType type;
+    private String type;
     private Double score;
-    
-    public enum EmotionType {
-        SAD, HAPPY, ANGRY, EXCITED, NERVOUS, CALM, CONFUSED, SURPRISED
-    }
 } 

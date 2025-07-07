@@ -295,8 +295,8 @@ public class StoryConversionWorker {
             
             for (Map.Entry<String, Double> entry : emotionScores.entrySet()) {
                 try {
-                    com.breakupstories.model.Emotion.EmotionType emotionType = 
-                        com.breakupstories.model.Emotion.EmotionType.valueOf(entry.getKey().toUpperCase());
+                    // Use emotion type as string directly
+                    String emotionType = entry.getKey();
                     
                     com.breakupstories.model.Emotion emotion = com.breakupstories.model.Emotion.builder()
                             .type(emotionType)
@@ -304,8 +304,8 @@ public class StoryConversionWorker {
                             .build();
                     
                     emotions.add(emotion);
-                } catch (IllegalArgumentException e) {
-                    log.warn("Unknown emotion type: {} for story: {}", entry.getKey(), dataStore.getId());
+                } catch (Exception e) {
+                    log.warn("Error processing emotion type: {} for story: {}", entry.getKey(), dataStore.getId(), e);
                 }
             }
             
