@@ -3,12 +3,7 @@ spring:
     name: breakup-stories-api
 
   # Timezone configuration for Indian Standard Time
-  jackson:
-    default-property-inclusion: non_null
-    serialization:
-      write-dates-as-timestamps: false
-    time-zone: Asia/Kolkata
-    date-format: yyyy-MM-dd HH:mm:ss
+  # Jackson configuration is handled in JacksonConfig.java
 
   # JVM timezone configuration
   jvm:

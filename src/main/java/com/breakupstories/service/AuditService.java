@@ -213,7 +213,7 @@ public class AuditService {
      * @return List of story IDs owned by the user
      */
     private List<String> getUserStoryIds(String userId) {
-        Page<Story> userStories = storyRepository.findByUserId(userId, PageRequest.of(0, Integer.MAX_VALUE));
+        Page<Story> userStories = storyRepository.findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, Integer.MAX_VALUE));
         return userStories.getContent().stream()
                 .map(Story::getId)
                 .collect(Collectors.toList());

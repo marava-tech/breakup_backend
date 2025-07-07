@@ -25,18 +25,15 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDateTime;
 import com.breakupstories.util.TimestampUtil;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.HashMap;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -482,7 +479,7 @@ public class StoryService {
      */
     public PagedResponse<StoryResponse> getStories(String currentUserId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByUserId(currentUserId, pageable);
+        Page<Story> storyPage = storyRepository.findByUserIdOrderByCreatedAtDesc(currentUserId, pageable);
         
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -656,7 +653,7 @@ public class StoryService {
      */
     public PagedResponse<StoryResponse> getLikedStories(String userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByUserId(userId, pageable);
+        Page<Story> storyPage = storyRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
         
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .filter(story -> likeService.isLiked(userId, story.getId()))

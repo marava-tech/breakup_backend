@@ -13,7 +13,7 @@ import java.util.List;
 @Repository
 public interface StoryRepository extends MongoRepository<Story, String> {
     
-    Page<Story> findByUserId(String userId, Pageable pageable);
+    Page<Story> findByUserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
     
     Page<Story> findByStatus(Story.StoryStatus status, Pageable pageable);
     

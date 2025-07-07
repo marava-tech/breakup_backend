@@ -1,57 +1,63 @@
-package com.breakupstories.config;
+package com.breakupstories.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalTimeSerializer;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.TimeZone;
+import java.util.Map;
 
 /**
- * Jackson configuration for proper date/time serialization with Indian timezone
+ * Test class to verify timestamp serialization format
  */
-@Configuration
-public class JacksonConfig {
-
-    /**
-     * Configure ObjectMapper with Indian timezone for date/time serialization
-     */
-    @Bean
-    @Primary
-    public ObjectMapper objectMapper() {
+public class TimestampFormatTest {
+    
+    public static void main(String[] args) throws Exception {
+        // Create ObjectMapper with the same configuration as JacksonConfig
         ObjectMapper objectMapper = new ObjectMapper();
         
-        // Configure JavaTimeModule with custom serializers for date/time types
+        // Configure JavaTimeModule with custom serializers
         JavaTimeModule javaTimeModule = new JavaTimeModule();
         
-        // Use the same date format as specified in application.yml
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
         
-        // Add serializers for different date/time types
         javaTimeModule.addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(dateTimeFormatter));
         javaTimeModule.addSerializer(LocalDate.class, new LocalDateSerializer(dateFormatter));
         javaTimeModule.addSerializer(LocalTime.class, new LocalTimeSerializer(timeFormatter));
         
-        // Register the configured JavaTimeModule
         objectMapper.registerModule(javaTimeModule);
-        
-        // Disable writing dates as timestamps to ensure string format
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        
-        // Set timezone to Indian Standard Time
         objectMapper.setTimeZone(TimeZone.getTimeZone("Asia/Kolkata"));
         
-        return objectMapper;
+        // Test data
+        LocalDateTime now = LocalDateTime.now();
+        LocalDate today = LocalDate.now();
+        LocalTime time = LocalTime.now();
+        
+        // Test serialization
+        String json = objectMapper.writeValueAsString(Map.of(
+            "createdAt", now,
+            "date", today,
+            "time", time
+        ));
+        
+        System.out.println("Serialized JSON:");
+        System.out.println(json);
+        
+        // Verify it's not an array format
+        if (json.contains("[") && json.contains("]")) {
+            System.out.println("❌ ERROR: Timestamps are being serialized as arrays!");
+        } else {
+            System.out.println("✅ SUCCESS: Timestamps are being serialized as strings!");
+        }
     }
 } 
