@@ -54,7 +54,6 @@ jwt:
 logging:
   level:
     com.breakupstories: DEBUG
-    org.springframework.data.mongodb: DEBUG
     org.springframework.security: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
