@@ -178,9 +178,10 @@ public class CommentController {
     public ResponseEntity<Void> flagCommentAsAbusive(
             @PathVariable String commentId,
             @RequestParam String category,
-            @RequestParam String explanation) {
+            @RequestParam String explanation,
+            @RequestParam Double confidence) {
         
-        commentService.flagCommentAsAbusive(commentId, category, explanation);
+        commentService.flagCommentAsAbusive(commentId, category, explanation,confidence);
         return ResponseEntity.ok().build();
     }
     

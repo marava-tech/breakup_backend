@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import com.breakupstories.util.TimestampUtil;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -24,7 +25,7 @@ public class OTPServiceImpl implements OTPService {
 
     private String generateOtp() {
         String otp = String.format("%06d", RANDOM.nextInt(1000000));
-        otpExpiryMap.put(otp, System.currentTimeMillis() + 10 * 60 * 1000); // 10 minutes expiry
+        otpExpiryMap.put(otp, TimestampUtil.currentEpochMillis() + 10 * 60 * 1000); // 10 minutes expiry
         log.info("Generated OTP: {}", otp);
         return otp;
     }
@@ -105,7 +106,7 @@ public class OTPServiceImpl implements OTPService {
         emailOtpMap.put(email, otp);
         try {
             var gmailContent = getUnFormattedGmailContent();
-            var formattedGmailContent = String.format(gmailContent, otp, LocalDateTime.now().getYear());
+            var formattedGmailContent = String.format(gmailContent, otp, TimestampUtil.currentLocalDateTime().getYear());
             gmailSender.sendGmail(email, "Breakup Stories Verification OTP", formattedGmailContent);
             log.info("Successfully sent OTP to email: {}", email);
             return true;
@@ -127,7 +128,7 @@ public class OTPServiceImpl implements OTPService {
             }
             
             Long expiryTime = otpExpiryMap.get(storedOtp);
-            if (expiryTime != null && System.currentTimeMillis() > expiryTime) {
+            if (expiryTime != null && TimestampUtil.currentEpochMillis() > expiryTime) {
                 // Remove expired OTP
                 emailOtpMap.remove(email);
                 otpExpiryMap.remove(storedOtp);
@@ -158,7 +159,7 @@ public class OTPServiceImpl implements OTPService {
         for (var otp : otps) {
             log.debug("Checking if current OTP {} is expired", otp);
             Long expiryTime = otpExpiryMap.get(otp);
-            if (expiryTime != null && System.currentTimeMillis() > expiryTime) {
+            if (expiryTime != null && TimestampUtil.currentEpochMillis() > expiryTime) {
                 otpExpiryMap.remove(otp);
                 // Also remove from emailOtpMap
                 emailOtpMap.entrySet().removeIf(entry -> entry.getValue().equals(otp));

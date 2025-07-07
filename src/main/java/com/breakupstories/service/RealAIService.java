@@ -34,7 +34,7 @@ public class RealAIService implements AIService {
     
     private final RestTemplate restTemplate;
     
-    @Value("${ai.service.base-url:http://localhost:8000}")
+    @Value("${ai.service.base-urlx:http://breakupai.marava.tech}")
     private String aiServiceBaseUrl;
 
 
@@ -295,7 +295,7 @@ public class RealAIService implements AIService {
             String encodedStory = java.net.URLEncoder.encode(story, "UTF-8");
             
             // Build URL with query parameters
-            String url = String.format("%s/consoling/generate-message?story=%s&language=%s&gender=%s&age=%d&consoleBy=%s", 
+            String url = String.format("%s/consoling/generate-message?story=%s&language=%s&gender=%s&age=%d&console_by=%s",
                     aiServiceBaseUrl, encodedStory, language, gender, age, consoleBy);
             
             // Create headers

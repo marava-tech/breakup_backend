@@ -14,6 +14,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import com.breakupstories.util.TimestampUtil;
 
 /**
  * Background worker that processes stories with AI services
@@ -87,7 +88,7 @@ public class StoryProcessingWorker {
                     .orElseThrow(() -> new RuntimeException("User not found: " + story.getUserId()));
             
             // Update status to PROCESSING
-            dataStore.setProcessingStartedAt(java.time.LocalDateTime.now());
+            dataStore.setProcessingStartedAt(TimestampUtil.currentLocalDateTime());
             storyStatusService.updateStatusInBothCollections(dataStore.getStoryId(), Story.StoryStatus.PROCESSING);
             
             log.info("Processing story with AI services for story: {} (Request ID: {})", dataStore.getId(), requestId);
@@ -96,7 +97,7 @@ public class StoryProcessingWorker {
             processStoryWithAI(story, dataStore, user, requestId);
             
             // Update status to PROCESSED
-            dataStore.setProcessingCompletedAt(java.time.LocalDateTime.now());
+            dataStore.setProcessingCompletedAt(TimestampUtil.currentLocalDateTime());
             storyStatusService.updateStatusInBothCollections(dataStore.getStoryId(), Story.StoryStatus.PROCESSED);
             
             log.info("Successfully processed story: {} (Request ID: {})", dataStore.getId(), requestId);
@@ -123,7 +124,7 @@ public class StoryProcessingWorker {
             try {
                 log.info("Starting transcription for story: {} (Request ID: {})", dataStore.getId(), requestId);
                 dataStore.setTranscriptionResponse(aiService.transcribeAudio(dataStore.getAudioUrl(), userLanguage));
-                dataStore.setTranscriptionCompletedAt(java.time.LocalDateTime.now());
+                dataStore.setTranscriptionCompletedAt(TimestampUtil.currentLocalDateTime());
                 storyDataStoreRepository.save(dataStore);
                 log.info("Transcription completed for story: {} (Request ID: {})", dataStore.getId(), requestId);
             } catch (Exception e) {
@@ -154,7 +155,7 @@ public class StoryProcessingWorker {
                         .rewrittenStory(rewrittenStory)
                         .language(userLanguage)
                         .build());
-                dataStore.setRewriteCompletedAt(java.time.LocalDateTime.now());
+                dataStore.setRewriteCompletedAt(TimestampUtil.currentLocalDateTime());
                 storyDataStoreRepository.save(dataStore);
                 log.info("Story rewrite completed for story: {} (Request ID: {})", dataStore.getId(), requestId);
             } catch (Exception e) {
@@ -168,7 +169,7 @@ public class StoryProcessingWorker {
             try {
                 log.info("Starting paragraph rewrite for story: {} (Request ID: {})", dataStore.getId(), requestId);
                 dataStore.setParagraphRewriteResponse(aiService.rewriteStoryIntoParagraphs(dataStore.getTranscriptionResponse().getTranscript(), userLanguage));
-                dataStore.setParagraphCompletedAt(java.time.LocalDateTime.now());
+                dataStore.setParagraphCompletedAt(TimestampUtil.currentLocalDateTime());
                 storyDataStoreRepository.save(dataStore);
                 log.info("Paragraph rewrite completed for story: {} (Request ID: {})", dataStore.getId(), requestId);
             } catch (Exception e) {
@@ -191,7 +192,7 @@ public class StoryProcessingWorker {
                 
                 String rewrittenStory = dataStore.getStoryRewriteResponse().getRewrittenStory();
                 dataStore.setStoryAnalysisResponse(aiService.analyzeStory(rewrittenStory, userLanguage));
-                dataStore.setAnalysisCompletedAt(java.time.LocalDateTime.now());
+                dataStore.setAnalysisCompletedAt(TimestampUtil.currentLocalDateTime());
                 storyDataStoreRepository.save(dataStore);
                 log.info("Story analysis completed for story: {} (Request ID: {})", dataStore.getId(), requestId);
             } catch (Exception e) {

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import com.breakupstories.util.TimestampUtil;
 
 /**
  * Service for analyzing comments using AI to detect hateful/negative content
@@ -36,7 +37,7 @@ public class CommentAnalysisService {
         
         try {
             // Calculate time 10 minutes ago
-            LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+            LocalDateTime tenMinutesAgo = TimestampUtil.currentLocalDateTime().minusMinutes(10);
             
             // Fetch comments from the last 10 minutes
             List<Comment> recentComments = commentRepository.findByCreatedAtAfter(tenMinutesAgo);
@@ -60,6 +61,7 @@ public class CommentAnalysisService {
                     comment.setAbusive(abuseDetectionResponse.getIs_abusive());
                     comment.setExplanation(abuseDetectionResponse.getExplanation());
                     comment.setCategory(abuseDetectionResponse.getCategory());
+                    comment.setConfidence(abuseDetectionResponse.getConfidence());
                     commentRepository.save(comment);
                 } catch (Exception e) {
                     log.error("Error analyzing comment {}: {}", comment.getId(), e.getMessage(), e);
@@ -96,7 +98,7 @@ public class CommentAnalysisService {
      * @return Analysis statistics
      */
     public CommentAnalysisStats getAnalysisStats() {
-        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+        LocalDateTime tenMinutesAgo = TimestampUtil.currentLocalDateTime().minusMinutes(10);
         List<Comment> recentComments = commentRepository.findByCreatedAtAfter(tenMinutesAgo);
         
         long totalComments = recentComments.size();
@@ -107,7 +109,7 @@ public class CommentAnalysisService {
                 .totalComments(totalComments)
                 .activeComments(activeComments)
                 .inactiveComments(inactiveComments)
-                .analysisTime(LocalDateTime.now())
+                .analysisTime(TimestampUtil.currentLocalDateTime())
                 .build();
     }
     

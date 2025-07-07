@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.security.Key;
 import java.util.Date;
+import com.breakupstories.util.TimestampUtil;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -52,8 +53,8 @@ public class JwtService {
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(userDetails.getUsername())
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .setIssuedAt(new Date(TimestampUtil.currentEpochMillis()))
+                .setExpiration(new Date(TimestampUtil.currentEpochMillis() + expiration))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -64,7 +65,7 @@ public class JwtService {
     }
     
     private boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
+        return extractExpiration(token).before(new Date(TimestampUtil.currentEpochMillis()));
     }
     
     private Date extractExpiration(String token) {
