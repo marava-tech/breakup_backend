@@ -31,6 +31,7 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import com.breakupstories.util.TimestampUtil;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.HashMap;
@@ -117,8 +118,8 @@ public class StoryService {
                     .language(user.getPreferredStoryLanguage())
                     .processingStatus(StoryDataStore.ProcessingStatus.UPLOAD_PENDING)
                     .uploadMetadata(uploadMetadata)
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
+                                    .createdAt(TimestampUtil.currentLocalDateTime())
+                .updatedAt(TimestampUtil.currentLocalDateTime())
                     .build();
             
             StoryDataStore savedDataStore = storyDataStoreRepository.save(dataStore);

@@ -34,23 +34,6 @@ public class CommentService {
         
         // Perform abuse detection on the comment text
         boolean isAbusive = false;
-        String category = null;
-        String explanation = null;
-        
-        try {
-            log.info("Performing abuse detection on comment text");
-            var abuseDetectionResponse = aiService.detectAbuse(request.getText(), "en");
-            isAbusive = abuseDetectionResponse.getIs_abusive();
-            category = abuseDetectionResponse.getCategory();
-            explanation = abuseDetectionResponse.getExplanation();
-            
-            log.info("Abuse detection completed - Is Abusive: {}, Category: {}, Confidence: {}", 
-                    isAbusive, category, abuseDetectionResponse.getConfidence());
-        } catch (Exception e) {
-            log.error("Error performing abuse detection on comment: {}", e.getMessage(), e);
-            // Continue with comment creation even if abuse detection fails
-            // Default values will be used (isAbusive = false, category = null, explanation = null)
-        }
         
         Comment comment = Comment.builder()
                 .storyId(request.getStoryId())
@@ -59,8 +42,9 @@ public class CommentService {
                 .active(true)
                 .parentId(request.getParentId())
                 .isAbusive(isAbusive)
-                .category(category)
-                .explanation(explanation)
+                .confidence(null)
+                .category(null)
+                .explanation(null)
                 .build();
         
         Comment savedComment = commentRepository.save(comment);
@@ -199,6 +183,7 @@ public class CommentService {
         boolean isAbusive = false;
         String category = null;
         String explanation = null;
+        Double confidence = null;
         
         try {
             log.info("Performing abuse detection on updated comment text");
@@ -206,6 +191,7 @@ public class CommentService {
             isAbusive = abuseDetectionResponse.getIs_abusive();
             category = abuseDetectionResponse.getCategory();
             explanation = abuseDetectionResponse.getExplanation();
+            confidence = abuseDetectionResponse.getConfidence();
             
             log.info("Abuse detection completed for updated comment - Is Abusive: {}, Category: {}, Confidence: {}", 
                     isAbusive, category, abuseDetectionResponse.getConfidence());
@@ -216,12 +202,14 @@ public class CommentService {
             isAbusive = comment.isAbusive();
             category = comment.getCategory();
             explanation = comment.getExplanation();
+            confidence = comment.getConfidence();
         }
         
         comment.setText(request.getText());
         comment.setAbusive(isAbusive);
         comment.setCategory(category);
         comment.setExplanation(explanation);
+        comment.setConfidence(confidence);
         
         Comment updatedComment = commentRepository.save(comment);
         log.info("Comment {} updated successfully (Abusive: {})", commentId, isAbusive);
@@ -334,7 +322,7 @@ public class CommentService {
      * @param category The abuse category
      * @param explanation The explanation for flagging
      */
-    public void flagCommentAsAbusive(String commentId, String category, String explanation) {
+    public void flagCommentAsAbusive(String commentId, String category, String explanation,Double confidence) {
         log.info("Manually flagging comment {} as abusive", commentId);
         
         Comment comment = commentRepository.findById(commentId)
@@ -343,6 +331,7 @@ public class CommentService {
         comment.setAbusive(true);
         comment.setCategory(category);
         comment.setExplanation(explanation);
+        comment.setConfidence(confidence);
         
         commentRepository.save(comment);
         log.info("Comment {} flagged as abusive with category: {}", commentId, category);
@@ -361,6 +350,7 @@ public class CommentService {
         comment.setAbusive(false);
         comment.setCategory(null);
         comment.setExplanation(null);
+        comment.setConfidence(null);
         
         commentRepository.save(comment);
         log.info("Comment {} unflagged as abusive", commentId);

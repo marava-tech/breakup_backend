@@ -26,11 +26,19 @@ public interface CommentRepository extends MongoRepository<Comment, String> {
     Page<Comment> findByUserId(String userId, Pageable pageable);
     
     /**
-     * Find comments created in the last 10 minutes
-     * @param fromTime The start time (10 minutes ago)
+     * Find comments created after the specified time
+     * @param fromTime The start time
      * @return List of comments created after the specified time
      */
     List<Comment> findByCreatedAtAfter(LocalDateTime fromTime);
+    
+    /**
+     * Find comments created after the specified time with null category, explanation, and confidence
+     * @param fromTime The start time
+     * @return List of comments created after the specified time with null abuse detection fields
+     */
+    @Query("{'createdAt': {$gt: ?0}, 'category': null, 'explanation': null, 'confidence': null}")
+    List<Comment> findByCreatedAtAfterAndCategoryIsNullAndExplanationIsNullAndConfidenceIsNull(LocalDateTime fromTime);
     
     // Active comments only
     Page<Comment> findByStoryIdAndActiveTrue(String storyId, Pageable pageable);

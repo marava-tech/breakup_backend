@@ -362,7 +362,7 @@ public class AuditService {
                             }
                             
                             // Check for cooldown views (1 minute)
-                            long oneMinuteAgo = System.currentTimeMillis() - (1 * 60 * 1000);
+                            long oneMinuteAgo = TimestampUtil.currentEpochMillis() - (1 * 60 * 1000);
                             if (audit.getCreatedAt() != null && audit.getCreatedAt() < oneMinuteAgo) {
                                 // Check if there's a more recent view by the same user/IP
                                 List<Audit> recentViews;
@@ -527,7 +527,7 @@ public class AuditService {
                     }
                     
                     // Check for cooldown views (1 minute)
-                    long oneMinuteAgo = System.currentTimeMillis() - (1 * 60 * 1000);
+                    long oneMinuteAgo = TimestampUtil.currentEpochMillis() - (1 * 60 * 1000);
                     if (audit.getCreatedAt() != null && audit.getCreatedAt() < oneMinuteAgo) {
                         // Check if there's a more recent view by the same user/IP
                         List<Audit> recentViews;

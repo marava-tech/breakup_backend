@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import com.breakupstories.util.TimestampUtil;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -177,7 +178,7 @@ public class StoryConversionWorker {
                     .rejectionReasons(rejectionReasons.length() > 0 ? List.of(rejectionReasons.toString()) : null)
                     .status(Story.StoryStatus.ACTIVE) // All converted stories are active
                     .createdAt(dataStore.getCreatedAt())
-                    .updatedAt(LocalDateTime.now())
+                    .updatedAt(TimestampUtil.currentLocalDateTime())
                     .build();
             
             // Save the Story entity
@@ -422,7 +423,7 @@ public class StoryConversionWorker {
                     .rejectionReasons(List.of(rejectionReasons.toString()))
                     .status(Story.StoryStatus.REJECTED) // Failed stories are rejected
                     .createdAt(dataStore.getCreatedAt())
-                    .updatedAt(LocalDateTime.now())
+                    .updatedAt(TimestampUtil.currentLocalDateTime())
                     .build();
             
             // Save the Story entity
@@ -491,7 +492,7 @@ public class StoryConversionWorker {
                     .rejectionReasons(List.of(rejectionReasons.toString()))
                     .status(Story.StoryStatus.REJECTED) // Invalid stories are rejected
                     .createdAt(dataStore.getCreatedAt())
-                    .updatedAt(LocalDateTime.now())
+                    .updatedAt(TimestampUtil.currentLocalDateTime())
                     .build();
             
             // Save the Story entity

@@ -29,22 +29,8 @@ public class CommentResponse {
     private boolean isAbusive;
     private String category;
     private String explanation;
+    private Double confidence;
 
-    public static CommentResponse fromComment(Comment comment) {
-        return CommentResponse.builder()
-                .id(comment.getId())
-                .storyId(comment.getStoryId())
-                .userId(comment.getUserId())
-                .text(comment.getText())
-                .parentId(comment.getParentId())
-                .isAbusive(comment.isAbusive())
-                .category(comment.getCategory())
-                .explanation(comment.getExplanation())
-                .createdAt(comment.getCreatedAt())
-                .updatedAt(comment.getUpdatedAt())
-                .build();
-    }
-    
     public static CommentResponse fromComment(Comment comment, User user) {
         return CommentResponse.builder()
                 .id(comment.getId())
@@ -54,6 +40,7 @@ public class CommentResponse {
                 .text(comment.getText())
                 .parentId(comment.getParentId())
                 .isAbusive(comment.isAbusive())
+                .confidence(comment.getConfidence())
                 .category(comment.getCategory())
                 .explanation(comment.getExplanation())
                 .createdAt(comment.getCreatedAt())

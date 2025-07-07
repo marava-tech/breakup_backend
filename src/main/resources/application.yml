@@ -2,6 +2,17 @@ spring:
   application:
     name: breakup-stories-api
 
+  # Timezone configuration for Indian Standard Time
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: Asia/Kolkata
+    date-format: yyyy-MM-dd HH:mm:ss
+
+  # JVM timezone configuration
+  jvm:
+    timezone: Asia/Kolkata
 
   data:
     mongodb:
@@ -13,11 +24,6 @@ spring:
       authentication-database: admin
       auto-index-creation: true
 
-  
-  jackson:
-    default-property-inclusion: non_null
-    serialization:
-      write-dates-as-timestamps: false
   
   # Gmail SMTP configuration
   mail:
