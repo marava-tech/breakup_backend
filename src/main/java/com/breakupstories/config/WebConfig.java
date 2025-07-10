@@ -15,9 +15,17 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins("*")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedOrigins(
+                    "http://localhost:3000",           // Local development
+                    "https://localhost:3000",          // Local development with HTTPS
+                    "http://breakup-ai-server:8080",   // Server domain
+                    "https://breakup-ai-server:8080",  // Server domain with HTTPS
+                    "https://breakupadmin.marava.tech", // Production admin domain
+                    "http://breakupadmin.marava.tech"   // Production admin domain (fallback)
+                )
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
                 .allowedHeaders("*")
+                .allowCredentials(true)
                 .maxAge(3600);
     }
     
