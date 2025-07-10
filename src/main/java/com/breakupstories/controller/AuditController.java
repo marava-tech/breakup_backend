@@ -49,9 +49,11 @@ public class AuditController {
     public ResponseEntity<PagedResponse<AuditResponse>> getAuditsByUser(
             @PathVariable String userId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
         
-        PagedResponse<AuditResponse> response = auditService.getAuditsByUser(userId, page, size);
+        PagedResponse<AuditResponse> response = auditService.getAuditsByUser(userId, page, size, sortBy, sortOrder);
         return ResponseEntity.ok(response);
     }
     

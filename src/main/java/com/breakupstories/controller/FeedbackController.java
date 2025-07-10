@@ -63,12 +63,20 @@ public class FeedbackController {
     }
     
     @GetMapping
-    @Operation(summary = "Get all feedbacks", description = "Retrieve paginated list of all feedbacks")
+    @Operation(summary = "Get all feedbacks with filters", description = "Retrieve paginated list of feedbacks with comprehensive filtering")
     public ResponseEntity<PagedResponse<FeedbackResponse>> getFeedbacks(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String userId,
+            @RequestParam(required = false) String storyId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String feedbackId,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
         
-        PagedResponse<FeedbackResponse> response = feedbackService.getFeedbacks(page, size);
+        PagedResponse<FeedbackResponse> response = feedbackService.getFeedbacksWithFilters(
+            page, size, userId, storyId, type, status, feedbackId, sortBy, sortOrder);
         return ResponseEntity.ok(response);
     }
     
@@ -172,9 +180,19 @@ public class FeedbackController {
     @Operation(summary = "Update feedback status (Admin)", description = "Update feedback status and add admin response")
     public ResponseEntity<FeedbackResponse> updateFeedbackStatus(
             @PathVariable String feedbackId,
-            @Valid @RequestBody FeedbackStatusUpdateRequest request) {
+            @RequestParam Feedback.FeedbackStatus status) {
         
-        FeedbackResponse response = feedbackService.updateFeedbackStatus(feedbackId, request.getStatus(), request.getAdminResponse());
+        FeedbackResponse response = feedbackService.updateFeedbackStatus(feedbackId,status);
+        return ResponseEntity.ok(response);
+    }
+    
+    @PostMapping("/{feedbackId}/admin-response")
+    @Operation(summary = "Submit admin response for feedback", description = "Submit admin response and update status to IN_REVIEW if currently PENDING")
+    public ResponseEntity<FeedbackResponse> submitAdminResponse(
+            @PathVariable String feedbackId,
+            @RequestParam String adminResponse) {
+        
+        FeedbackResponse response = feedbackService.submitAdminResponse(feedbackId, adminResponse);
         return ResponseEntity.ok(response);
     }
     

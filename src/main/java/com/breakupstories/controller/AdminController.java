@@ -29,18 +29,17 @@ import java.util.Map;
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Admin Management", description = "Administrative endpoints for managing stories, users, comments, and feedbacks")
+@Tag(name = "Admin Management", description = "Administrative endpoints for managing stories, users, and comments")
 public class AdminController {
     
     private final StoryRepository storyRepository;
     private final UserRepository userRepository;
     private final CommentRepository commentRepository;
-    private final FeedbackRepository feedbackRepository;
     private final LikeRepository likeRepository;
     private final StoryService storyService;
     private final UserService userService;
-    private final FeedbackService feedbackService;
     private final AuditService auditService;
+    private final WithdrawalRepository withdrawalRepository;
     
     // ==================== STORY MANAGEMENT ====================
     
@@ -635,115 +634,35 @@ public class AdminController {
         }
     }
     
-    // ==================== FEEDBACK MANAGEMENT ====================
-    
-    @GetMapping("/feedbacks")
-    public ResponseEntity<PagedResponse<FeedbackResponse>> getFeedbacks(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String userId,
-            @RequestParam(required = false) String storyId,
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortOrder) {
-        
-        try {
-            Pageable pageable = createPageable(page, size, sortBy, sortOrder);
-            Page<Feedback> feedbackPage = feedbackRepository.findAll(pageable);
-            
-            List<FeedbackResponse> feedbacks = feedbackPage.getContent().stream()
-                    .map(feedbackService::enrichFeedbackResponse)
-                    .collect(java.util.stream.Collectors.toList());
-            
-            return ResponseEntity.ok(PagedResponse.of(feedbacks, page, size, feedbackPage.getTotalElements()));
-            
-        } catch (Exception e) {
-            log.error("Error fetching feedbacks for admin: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    
-    @PutMapping("/feedbacks/{feedbackId}")
-    public ResponseEntity<Map<String, Object>> updateFeedback(
-            @PathVariable String feedbackId,
-            @RequestBody FeedbackUpdateRequest updates) {
-        
-        try {
-            Feedback feedback = feedbackRepository.findById(feedbackId)
-                    .orElseThrow(() -> new RuntimeException("Feedback not found"));
-            
-            // Update allowed fields
-            if (updates.getStatus() != null) {
-                feedback.setStatus(Feedback.FeedbackStatus.valueOf(updates.getStatus()));
-            }
-            if (updates.getAdminResponse() != null) {
-                feedback.setAdminResponse(updates.getAdminResponse());
-            }
-            
-            feedbackRepository.save(feedback);
-            
-            // Log audit
-            auditService.logAudit("admin", Audit.EntityType.FEEDBACK, Audit.ActionType.UPDATE, feedbackId);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Feedback updated successfully");
-            response.put("feedbackId", feedbackId);
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            log.error("Error updating feedback: {}", e.getMessage(), e);
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
-    }
-    
-    @GetMapping("/feedbacks/statistics")
-    public ResponseEntity<Map<String, Object>> getFeedbackStatistics() {
+    @GetMapping("/withdrawals/statistics")
+    public ResponseEntity<Map<String, Object>> getWithdrawalStatistics() {
         try {
             Map<String, Object> stats = new HashMap<>();
             
-            // Total feedbacks
-            long totalFeedbacks = feedbackRepository.count();
-            stats.put("totalFeedbacks", totalFeedbacks);
+            // Total withdrawals
+            long totalWithdrawals = withdrawalRepository.count();
+            stats.put("totalWithdrawals", totalWithdrawals);
             
-            // Feedbacks by status
-            stats.put("pendingFeedbacks", feedbackRepository.countByStatus(Feedback.FeedbackStatus.PENDING));
-            stats.put("inProgressFeedbacks", feedbackRepository.countByStatus(Feedback.FeedbackStatus.IN_REVIEW));
-            stats.put("resolvedFeedbacks", feedbackRepository.countByStatus(Feedback.FeedbackStatus.RESOLVED));
-            stats.put("rejectedFeedbacks", feedbackRepository.countByStatus(Feedback.FeedbackStatus.REJECTED));
+            // Withdrawals by status
+            stats.put("pendingWithdrawals", withdrawalRepository.countByStatus(com.breakupstories.model.Withdrawal.WithdrawalStatus.PENDING));
+            stats.put("processingWithdrawals", withdrawalRepository.countByStatus(com.breakupstories.model.Withdrawal.WithdrawalStatus.PROCESSING));
+            stats.put("processedWithdrawals", withdrawalRepository.countByStatus(com.breakupstories.model.Withdrawal.WithdrawalStatus.PROCESSED));
+            stats.put("rejectedWithdrawals", withdrawalRepository.countByStatus(com.breakupstories.model.Withdrawal.WithdrawalStatus.REJECTED));
             
-            // Feedbacks by type
-            List<Map<String, Object>> typeStats = feedbackRepository.findAll().stream()
-                    .collect(java.util.stream.Collectors.groupingBy(
-                            Feedback::getType,
-                            java.util.stream.Collectors.counting()))
-                    .entrySet().stream()
-                    .map(entry -> {
-                        Map<String, Object> typeStat = new HashMap<>();
-                        typeStat.put("type", entry.getKey());
-                        typeStat.put("count", entry.getValue());
-                        return typeStat;
-                    })
-                    .collect(java.util.stream.Collectors.toList());
-            stats.put("typeStats", typeStats);
-            
-            // Recent feedbacks (last 7 days)
+            // Recent withdrawals (last 7 days)
             LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
-            long recentFeedbacks = feedbackRepository.countByCreatedAtAfter(weekAgo);
-            stats.put("recentFeedbacks", recentFeedbacks);
+            long recentWithdrawals = withdrawalRepository.countByCreatedAtAfter(weekAgo);
+            stats.put("recentWithdrawals", recentWithdrawals);
             
             return ResponseEntity.ok(stats);
             
         } catch (Exception e) {
-            log.error("Error fetching feedback statistics: {}", e.getMessage(), e);
+            log.error("Error fetching withdrawal statistics: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+    
+
     
     // ==================== DASHBOARD STATISTICS ====================
     

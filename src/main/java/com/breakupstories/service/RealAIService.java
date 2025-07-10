@@ -35,7 +35,7 @@ public class RealAIService implements AIService {
     
     private final RestTemplate restTemplate;
     
-    @Value("${ai.service.base-urlx:http://breakupai.marava.tech}")
+    @Value("${ai.service.base-url:http://breakupai.marava.tech}")
     private String aiServiceBaseUrl;
 
 
