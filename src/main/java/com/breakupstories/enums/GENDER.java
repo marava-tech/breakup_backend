@@ -1,5 +1,5 @@
 package com.breakupstories.enums;
 
 public enum GENDER {
-    MALE , FEMALE
+    MALE , FEMALE,OTHER
 }

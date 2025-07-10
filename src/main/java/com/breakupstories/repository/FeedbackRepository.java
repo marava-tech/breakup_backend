@@ -6,6 +6,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+
 @Repository
 public interface FeedbackRepository extends MongoRepository<Feedback, String> {
     
@@ -20,4 +22,9 @@ public interface FeedbackRepository extends MongoRepository<Feedback, String> {
     Page<Feedback> findByTypeAndStatus(Feedback.FeedbackType type, Feedback.FeedbackStatus status, Pageable pageable);
     
     long countByUserIdAndTypeAndStatus(String userId, Feedback.FeedbackType type, Feedback.FeedbackStatus status);
+    
+    // Count methods for admin statistics
+    long countByStatus(Feedback.FeedbackStatus status);
+    
+    long countByCreatedAtAfter(LocalDateTime date);
 } 

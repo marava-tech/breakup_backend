@@ -35,7 +35,7 @@ public class RealAIService implements AIService {
     
     private final RestTemplate restTemplate;
     
-    @Value("${ai.service.base-url:http://localhost:8000}")
+    @Value("${ai.service.base-urlx:http://breakupai.marava.tech}")
     private String aiServiceBaseUrl;
 
 
@@ -120,7 +120,7 @@ public class RealAIService implements AIService {
         
         try {
             // URL encode the transcript for query parameter
-            String encodedTranscript = java.net.URLEncoder.encode(transcript, "UTF-8");
+            String encodedTranscript = java.net.URLEncoder.encode(transcript, StandardCharsets.UTF_8);
             
             // Build URL with query parameters
             String url = String.format("%s/story-rewrite/paragraphs?transcript=%s&language=%s", 
@@ -168,7 +168,7 @@ public class RealAIService implements AIService {
         
         try {
             // URL encode the story for query parameter
-            String encodedStory = java.net.URLEncoder.encode(story, "UTF-8");
+            String encodedStory = java.net.URLEncoder.encode(story, StandardCharsets.UTF_8);
             
             // Build URL with query parameters
             String url = String.format("%s/story/analyze?story=%s&language=%s", 
@@ -209,7 +209,7 @@ public class RealAIService implements AIService {
         
         try {
             // URL encode the comment for query parameter
-            String encodedComment = java.net.URLEncoder.encode(comment, "UTF-8");
+            String encodedComment = java.net.URLEncoder.encode(comment, StandardCharsets.UTF_8);
             
             // Build URL with query parameters
             String url = String.format("%s/abuse-detection/detect?comment=%s&language=%s", 

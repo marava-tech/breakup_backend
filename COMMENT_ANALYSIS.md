@@ -108,7 +108,7 @@ private boolean callExternalAIService(String commentText) {
 ```java
 public class Comment {
     // ... existing fields ...
-    private boolean active = true; // New field for moderation
+    private final boolean active = true; // New field for moderation
 }
 ```
 

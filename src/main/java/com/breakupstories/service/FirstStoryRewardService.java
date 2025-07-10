@@ -107,7 +107,7 @@ public class FirstStoryRewardService {
         }
         
         int minDurationMinutes = defaultConfigService.getFirstStoryMinDurationMinutes();
-        long minDurationMillis = minDurationMinutes * 60 * 1000; // Convert minutes to milliseconds
+        long minDurationMillis = (long) minDurationMinutes * 60 * 1000; // Convert minutes to milliseconds
         
         boolean meetsRequirement = story.getDuration() >= minDurationMillis;
         

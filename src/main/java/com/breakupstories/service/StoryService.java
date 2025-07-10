@@ -209,7 +209,7 @@ public class StoryService {
             log.info("Returning {} trending stories for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) storiesWithScores.size());
+            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
             
         } catch (Exception e) {
             log.error("Error getting trending stories [RequestID: {}]: {}", requestId, e.getMessage(), e);
@@ -281,7 +281,7 @@ public class StoryService {
             log.info("Returning {} trending stories for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) storiesWithScores.size());
+            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
             
         } catch (Exception e) {
             log.error("Error getting trending stories for user {} [RequestID: {}]: {}", 
@@ -438,7 +438,7 @@ public class StoryService {
             log.info("Returning {} nearby stories for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) nearbyStories.size());
+            return PagedResponse.of(paginatedStories, page, size, nearbyStories.size());
             
         } catch (com.breakupstories.exception.LocationNotProvidedException e) {
             log.error("Location not provided for nearby stories [RequestID: {}]: {}", requestId, e.getMessage());
@@ -1026,7 +1026,7 @@ public class StoryService {
             log.info("Returning {} trending stories for page {} with custom weights [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) storiesWithScores.size());
+            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
             
         } catch (Exception e) {
             log.error("Error getting trending stories with custom weights [RequestID: {}]: {}", 
@@ -1119,7 +1119,7 @@ public class StoryService {
             log.info("Returning {} search results for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) matchingStories.size());
+            return PagedResponse.of(paginatedStories, page, size, matchingStories.size());
             
         } catch (Exception e) {
             log.error("Error searching stories by title and tags [RequestID: {}]: {}", requestId, e.getMessage(), e);
@@ -1227,7 +1227,7 @@ public class StoryService {
             log.info("Returning {} search results for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) matchingStories.size());
+            return PagedResponse.of(paginatedStories, page, size, matchingStories.size());
             
         } catch (Exception e) {
             log.error("Error searching stories by content [RequestID: {}]: {}", requestId, e.getMessage(), e);

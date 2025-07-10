@@ -22,6 +22,7 @@ public class Audit {
     private String id;
     
     private String userId;
+    private String username; // Store username for quick access
     private EntityType entityType;
     private ActionType actionType;
     private String entityId;

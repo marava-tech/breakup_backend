@@ -187,7 +187,7 @@ public class FeedbackService {
     }
     
     // Helper method to enrich feedback response with user information
-    private FeedbackResponse enrichFeedbackResponse(Feedback feedback) {
+    public FeedbackResponse enrichFeedbackResponse(Feedback feedback) {
         FeedbackResponse response = FeedbackResponse.fromFeedback(feedback);
         
         // Add username if available

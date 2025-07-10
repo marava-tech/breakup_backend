@@ -75,4 +75,82 @@ public interface CommentRepository extends MongoRepository<Comment, String> {
     long countByCategoryAndActiveTrue(String category);
     
     long countByActiveTrue();
+    
+    // Count method for admin statistics
+    long countByCreatedAtAfter(LocalDateTime date);
+    
+    // Date range methods for dashboard statistics
+    long countByCreatedAtBetween(LocalDateTime fromDate, LocalDateTime toDate);
+    
+    long countByActiveTrueAndCreatedAtBetween(LocalDateTime fromDate, LocalDateTime toDate);
+    
+    long countByIsAbusiveTrueAndCreatedAtBetween(LocalDateTime fromDate, LocalDateTime toDate);
+    
+    List<Comment> findByCreatedAtBetween(LocalDateTime fromDate, LocalDateTime toDate);
+    
+    // Count comments by user ID
+    long countByUserId(String userId);
+    
+    // Admin filtering methods
+    Page<Comment> findByIsAbusive(Boolean isAbusive, Pageable pageable);
+    
+    Page<Comment> findByCategory(String category, Pageable pageable);
+    
+    Page<Comment> findByActive(Boolean active, Pageable pageable);
+    
+    // Combined filtering methods
+    Page<Comment> findByStoryIdAndUserId(String storyId, String userId, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndIsAbusive(String storyId, Boolean isAbusive, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndCategory(String storyId, String category, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndActive(String storyId, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByUserIdAndIsAbusive(String userId, Boolean isAbusive, Pageable pageable);
+    
+    Page<Comment> findByUserIdAndCategory(String userId, String category, Pageable pageable);
+    
+    Page<Comment> findByUserIdAndActive(String userId, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByIsAbusiveAndCategory(Boolean isAbusive, String category, Pageable pageable);
+    
+    Page<Comment> findByIsAbusiveAndActive(Boolean isAbusive, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByCategoryAndActive(String category, Boolean active, Pageable pageable);
+    
+    // Three-way combinations
+    Page<Comment> findByStoryIdAndUserIdAndIsAbusive(String storyId, String userId, Boolean isAbusive, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndUserIdAndCategory(String storyId, String userId, String category, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndUserIdAndActive(String storyId, String userId, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndIsAbusiveAndCategory(String storyId, Boolean isAbusive, String category, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndIsAbusiveAndActive(String storyId, Boolean isAbusive, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndCategoryAndActive(String storyId, String category, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByUserIdAndIsAbusiveAndCategory(String userId, Boolean isAbusive, String category, Pageable pageable);
+    
+    Page<Comment> findByUserIdAndIsAbusiveAndActive(String userId, Boolean isAbusive, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByUserIdAndCategoryAndActive(String userId, String category, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByIsAbusiveAndCategoryAndActive(Boolean isAbusive, String category, Boolean active, Pageable pageable);
+    
+    // Four-way combinations
+    Page<Comment> findByStoryIdAndUserIdAndIsAbusiveAndCategory(String storyId, String userId, Boolean isAbusive, String category, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndUserIdAndIsAbusiveAndActive(String storyId, String userId, Boolean isAbusive, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndUserIdAndCategoryAndActive(String storyId, String userId, String category, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByStoryIdAndIsAbusiveAndCategoryAndActive(String storyId, Boolean isAbusive, String category, Boolean active, Pageable pageable);
+    
+    Page<Comment> findByUserIdAndIsAbusiveAndCategoryAndActive(String userId, Boolean isAbusive, String category, Boolean active, Pageable pageable);
+    
+    // All filters
+    Page<Comment> findByStoryIdAndUserIdAndIsAbusiveAndCategoryAndActive(String storyId, String userId, Boolean isAbusive, String category, Boolean active, Pageable pageable);
 } 

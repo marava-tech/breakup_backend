@@ -32,4 +32,7 @@ public interface LikeRepository extends MongoRepository<Like, String> {
     // Count likes for all stories by a user
     @Query("{'storyId': { $in: ?0 }}")
     long countByStoryUserId(String userId);
+    
+    // Date range methods for dashboard statistics
+    long countByCreatedAtBetween(java.time.LocalDateTime fromDate, java.time.LocalDateTime toDate);
 } 

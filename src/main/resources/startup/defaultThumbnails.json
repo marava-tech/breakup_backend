@@ -1,31 +1,31 @@
 [
     {
-        "key": "default_thumbnail_url",
+        "key": "default_thumbnail_url_1",
         "value": "http://res.cloudinary.com/dohsebpd1/image/upload/v1751208524/breakup/default_thumnail.png",
         "description": "Default profile image URL for female users",
         "active": true
       },
       {
         "key": "default_story_image_1",
-        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1751715042/breakup/story_mode_image_1_sq1ebx.png",
+        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/f_auto,q_auto/v1/breakup/story_mode_image_1_sq1ebx",
         "description": "Default profile image URL for female users",
         "active": true
       },
       {
         "key": "default_story_image_2",
-        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1751715044/breakup/story_mode_image_2_qet8v5.png",
+        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/f_auto,q_auto/v1/breakup/story_mode_image_2_xqzq0y",
         "description": "Default profile image URL for female users",
         "active": true
       },
       {
         "key": "default_story_image_3",
-        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1751715020/breakup/story_mode_image_3_fdl9wc.png",
+        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/f_auto,q_auto/v1/breakup/story_mode_image_3_xqzq0y",
         "description": "Default profile image URL for female users",
         "active": true
       },
       {
         "key": "default_story_image_4",
-        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/v1751715024/breakup/story_mode_image_4_fqqh9l.png",
+        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/f_auto,q_auto/v1/breakup/story_mode_image_4_xqzq0y",
         "description": "Default profile image URL for female users",
         "active": true
       }

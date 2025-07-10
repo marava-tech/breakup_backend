@@ -16,6 +16,7 @@ public class AuditResponse {
     
     private String id;
     private String userId;
+    private String username; // Username for display
     private Audit.EntityType entityType;
     private Audit.ActionType actionType;
     private String entityId;
@@ -33,6 +34,7 @@ public class AuditResponse {
         return AuditResponse.builder()
                 .id(audit.getId())
                 .userId(audit.getUserId())
+                .username(audit.getUsername())
                 .entityType(audit.getEntityType())
                 .actionType(audit.getActionType())
                 .entityId(audit.getEntityId())

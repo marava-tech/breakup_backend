@@ -24,10 +24,23 @@ public class AuditService {
     
     private final AuditRepository auditRepository;
     private final StoryRepository storyRepository;
+    private final UserService userService;
     
     public AuditResponse createAudit(AuditRequest request) {
+        // Fetch username if userId is provided
+        String username = null;
+        if (request.getUserId() != null && !request.getUserId().trim().isEmpty()) {
+            try {
+                username = userService.getUserById(request.getUserId()).getName();
+            } catch (Exception e) {
+                // If user not found, username will remain null
+                // This is acceptable for backward compatibility
+            }
+        }
+        
         Audit audit = Audit.builder()
                 .userId(request.getUserId())
+                .username(username)
                 .entityType(request.getEntityType())
                 .actionType(request.getActionType())
                 .entityId(request.getEntityId())
@@ -47,8 +60,20 @@ public class AuditService {
     
     public void logAudit(String userId, Audit.EntityType entityType, Audit.ActionType actionType, String entityId, 
                         String userAgent, String ipAddress, String sessionId, Map<String, Object> metadata) {
+        // Fetch username if userId is provided
+        String username = null;
+        if (userId != null && !userId.trim().isEmpty()) {
+            try {
+                username = userService.getUserById(userId).getName();
+            } catch (Exception e) {
+                // If user not found, username will remain null
+                // This is acceptable for backward compatibility
+            }
+        }
+        
         Audit audit = Audit.builder()
                 .userId(userId)
+                .username(username)
                 .entityType(entityType)
                 .actionType(actionType)
                 .entityId(entityId)
@@ -119,7 +144,7 @@ public class AuditService {
         Page<Audit> auditPage = auditRepository.findAll(pageable);
         
         List<AuditResponse> audits = auditPage.getContent().stream()
-                .map(AuditResponse::fromAudit)
+                .map(this::enrichAuditResponse)
                 .collect(Collectors.toList());
         
         return PagedResponse.of(audits, page, size, auditPage.getTotalElements());
@@ -130,7 +155,7 @@ public class AuditService {
         Page<Audit> auditPage = auditRepository.findByUserId(userId, pageable);
         
         List<AuditResponse> audits = auditPage.getContent().stream()
-                .map(AuditResponse::fromAudit)
+                .map(this::enrichAuditResponse)
                 .collect(Collectors.toList());
         
         return PagedResponse.of(audits, page, size, auditPage.getTotalElements());
@@ -141,7 +166,7 @@ public class AuditService {
         Page<Audit> auditPage = auditRepository.findByEntityType(entityType, pageable);
         
         List<AuditResponse> audits = auditPage.getContent().stream()
-                .map(AuditResponse::fromAudit)
+                .map(this::enrichAuditResponse)
                 .collect(Collectors.toList());
         
         return PagedResponse.of(audits, page, size, auditPage.getTotalElements());
@@ -152,7 +177,7 @@ public class AuditService {
         Page<Audit> auditPage = auditRepository.findByEntityId(entityId, pageable);
         
         List<AuditResponse> audits = auditPage.getContent().stream()
-                .map(AuditResponse::fromAudit)
+                .map(this::enrichAuditResponse)
                 .collect(Collectors.toList());
         
         return PagedResponse.of(audits, page, size, auditPage.getTotalElements());
@@ -163,7 +188,7 @@ public class AuditService {
         Page<Audit> auditPage = auditRepository.findByActionType(actionType, pageable);
         
         List<AuditResponse> audits = auditPage.getContent().stream()
-                .map(AuditResponse::fromAudit)
+                .map(this::enrichAuditResponse)
                 .collect(Collectors.toList());
         
         return PagedResponse.of(audits, page, size, auditPage.getTotalElements());
@@ -174,7 +199,7 @@ public class AuditService {
         Page<Audit> auditPage = auditRepository.findByUserIdAndEntityType(userId, entityType, pageable);
         
         List<AuditResponse> audits = auditPage.getContent().stream()
-                .map(AuditResponse::fromAudit)
+                .map(this::enrichAuditResponse)
                 .collect(Collectors.toList());
         
         return PagedResponse.of(audits, page, size, auditPage.getTotalElements());
@@ -184,7 +209,7 @@ public class AuditService {
         Audit audit = auditRepository.findById(auditId)
                 .orElseThrow(() -> new RuntimeException("Audit not found with ID: " + auditId));
         
-        return AuditResponse.fromAudit(audit);
+        return enrichAuditResponse(audit);
     }
     
     public void deleteAudit(String auditId) {
@@ -193,6 +218,30 @@ public class AuditService {
         }
         
         auditRepository.deleteById(auditId);
+    }
+    
+    /**
+     * Enrich audit response with username if it's missing
+     * @param audit The audit entity
+     * @return Enriched audit response
+     */
+    private AuditResponse enrichAuditResponse(Audit audit) {
+        AuditResponse response = AuditResponse.fromAudit(audit);
+        
+        // If username is null or empty, try to fetch it from user service
+        if (response.getUsername() == null || response.getUsername().trim().isEmpty()) {
+            if (audit.getUserId() != null && !audit.getUserId().trim().isEmpty()) {
+                try {
+                    String username = userService.getUserById(audit.getUserId()).getName();
+                    response.setUsername(username);
+                } catch (Exception e) {
+                    // If user not found, keep username as null
+                    // This is acceptable for deleted users or invalid user IDs
+                }
+            }
+        }
+        
+        return response;
     }
     
     public void logNotificationView(String userId, String userAgent, String ipAddress, String sessionId) {
@@ -362,7 +411,7 @@ public class AuditService {
                             }
                             
                             // Check for cooldown views (1 minute)
-                            long oneMinuteAgo = TimestampUtil.currentEpochMillis() - (1 * 60 * 1000);
+                            long oneMinuteAgo = TimestampUtil.currentEpochMillis() - (60 * 1000);
                             if (audit.getCreatedAt() != null && audit.getCreatedAt() < oneMinuteAgo) {
                                 // Check if there's a more recent view by the same user/IP
                                 List<Audit> recentViews;
@@ -377,9 +426,7 @@ public class AuditService {
                                 }
                                 
                                 // If there's a more recent view, exclude this one (cooldown)
-                                if (!recentViews.isEmpty()) {
-                                    return false;
-                                }
+                                return recentViews.isEmpty();
                             }
                             
                             return true;
@@ -527,7 +574,7 @@ public class AuditService {
                     }
                     
                     // Check for cooldown views (1 minute)
-                    long oneMinuteAgo = TimestampUtil.currentEpochMillis() - (1 * 60 * 1000);
+                    long oneMinuteAgo = TimestampUtil.currentEpochMillis() - (60 * 1000);
                     if (audit.getCreatedAt() != null && audit.getCreatedAt() < oneMinuteAgo) {
                         // Check if there's a more recent view by the same user/IP
                         List<Audit> recentViews;
@@ -542,9 +589,7 @@ public class AuditService {
                         }
                         
                         // If there's a more recent view, exclude this one (cooldown)
-                        if (!recentViews.isEmpty()) {
-                            return false;
-                        }
+                        return recentViews.isEmpty();
                     }
                     
                     return true;
@@ -597,7 +642,7 @@ public class AuditService {
         }
         
         // Calculate timestamp for 1 minute ago
-        long oneMinuteAgo = System.currentTimeMillis() - (1 * 60 * 1000);
+        long oneMinuteAgo = System.currentTimeMillis() - (60 * 1000);
         
         // Check if there's a recent view audit
         List<Audit> recentViews = auditRepository.findByUserIdAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(
@@ -618,7 +663,7 @@ public class AuditService {
         }
         
         // Calculate timestamp for 1 minute ago
-        long oneMinuteAgo = System.currentTimeMillis() - (1 * 60 * 1000);
+        long oneMinuteAgo = System.currentTimeMillis() - (60 * 1000);
         
         // Check if there's a recent view audit by IP (for unauthenticated users)
         List<Audit> recentViews = auditRepository.findByIpAddressAndEntityIdAndEntityTypeAndActionTypeAndCreatedAtAfter(

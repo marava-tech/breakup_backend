@@ -40,9 +40,9 @@ The cooldown system works as follows:
 
 1. **Time Calculation**: 
    ```java
-   // Calculate timestamp for 1 minute ago
-   long oneMinuteAgo = System.currentTimeMillis() - (1 * 60 * 1000);
-   ```
+// Calculate timestamp for 1 minute ago
+long oneMinuteAgo = System.currentTimeMillis() - (60 * 1000);
+```
 
 2. **Recent View Check**:
    - For authenticated users: Check by user ID
