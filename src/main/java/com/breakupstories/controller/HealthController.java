@@ -34,7 +34,7 @@ public class HealthController {
         response.put("message", "Service is running");
         response.put("timestamp", LocalDateTime.now());
         response.put("service", "Breakup Stories Backend");
-        response.put("version", "v1.4");
+        response.put("version", "v1.0");
         
         return ResponseEntity.ok(response);
     }
@@ -52,7 +52,7 @@ public class HealthController {
         response.put("message", "All systems operational");
         response.put("timestamp", LocalDateTime.now());
         response.put("service", "Breakup Stories Backend");
-        response.put("version", "2.0.0");
+        response.put("version", "1.5");
         
         Map<String, String> components = new HashMap<>();
         components.put("database", "UP");
