@@ -206,6 +206,74 @@ public class AdminController {
         }
     }
     
+    @PutMapping("/stories/{storyId}/status")
+    @Operation(summary = "Update story status", description = "Update the status of a specific story")
+    public ResponseEntity<Map<String, Object>> updateStoryStatus(
+            @PathVariable String storyId,
+            @RequestBody Map<String, String> request) {
+        
+        try {
+            String newStatus = request.get("status");
+            String rejectionReason = request.get("rejectionReason");
+            
+            if (newStatus == null || newStatus.trim().isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Status is required");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            Story story = storyRepository.findById(storyId)
+                    .orElseThrow(() -> new RuntimeException("Story not found"));
+            
+            // Validate status
+            Story.StoryStatus status;
+            try {
+                status = Story.StoryStatus.valueOf(newStatus.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Invalid status: " + newStatus);
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            // Update status
+            story.setStatus(status);
+            
+            // Handle rejection reasons
+            if (status == Story.StoryStatus.REJECTED && rejectionReason != null && !rejectionReason.trim().isEmpty()) {
+                if (story.getRejectionReasons() == null) {
+                    story.setRejectionReasons(new java.util.ArrayList<>());
+                }
+                story.getRejectionReasons().add(rejectionReason.trim());
+            } else if (status != Story.StoryStatus.REJECTED) {
+                // Clear rejection reasons if status is not REJECTED
+                story.setRejectionReasons(null);
+            }
+            
+            storyRepository.save(story);
+            
+            // Log audit
+            auditService.logAudit("admin", Audit.EntityType.STORY, Audit.ActionType.UPDATE, storyId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Story status updated successfully");
+            response.put("storyId", storyId);
+            response.put("newStatus", status.name());
+            response.put("previousStatus", story.getStatus().name());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error updating story status: {}", e.getMessage(), e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
     @GetMapping("/stories/statistics")
     public ResponseEntity<Map<String, Object>> getStoryStatistics() {
         try {

@@ -140,8 +140,11 @@ public class AuditService {
         logAudit(userId, Audit.EntityType.BOOKMARK, Audit.ActionType.DELETE, storyId, userAgent, ipAddress, sessionId, metadata);
     }
     
-    public PagedResponse<AuditResponse> getAudits(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
+    public PagedResponse<AuditResponse> getAudits(int page, int size, String sortBy, String sortOrder) {
+        // Create pageable with sorting
+        Sort.Direction direction = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        
         Page<Audit> auditPage = auditRepository.findAll(pageable);
         
         List<AuditResponse> audits = auditPage.getContent().stream()

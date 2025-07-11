@@ -37,9 +37,11 @@ public class AuditController {
     @Operation(summary = "Get all audits", description = "Retrieve paginated list of all audit entries")
     public ResponseEntity<PagedResponse<AuditResponse>> getAudits(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam( defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
         
-        PagedResponse<AuditResponse> response = auditService.getAudits(page, size);
+        PagedResponse<AuditResponse> response = auditService.getAudits(page, size, sortBy, sortOrder);
         return ResponseEntity.ok(response);
     }
     
