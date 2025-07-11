@@ -16,14 +16,14 @@ public class WebConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
                 .allowedOrigins(
-                    "http://localhost:3000",           // Local development
-                    "https://localhost:3000",          // Local development with HTTPS
-                    "http://breakup-ai-server:8080",   // Server domain
-                    "https://breakup-ai-server:8080",  // Server domain with HTTPS
-                    "https://breakupadmin.marava.tech", // Production admin domain
-                    "http://breakupadmin.marava.tech"   // Production admin domain (fallback)
+                        "http://localhost:3000",
+                        "https://localhost:3000",
+                        "https://breakupadmin.marava.tech",
+                        "http://breakupadmin.marava.tech",
+                        "http://213.163.205.34:3100",
+                        "https://213.163.205.34:3100"
                 )
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)
                 .maxAge(3600);

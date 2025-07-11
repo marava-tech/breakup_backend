@@ -34,7 +34,7 @@ public class HealthController {
         response.put("message", "Service is running");
         response.put("timestamp", LocalDateTime.now());
         response.put("service", "Breakup Stories Backend");
-        response.put("version", "v1.2");
+        response.put("version", "v1.4");
         
         return ResponseEntity.ok(response);
     }
