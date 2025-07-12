@@ -21,6 +21,10 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import com.breakupstories.dto.WithdrawalOptionResponse;
+import com.breakupstories.dto.WithdrawalOptionsResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -160,5 +164,72 @@ public class WithdrawalService {
                     return WithdrawalResponse.fromWithdrawal(withdrawal, user.getName());
                 })
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get withdrawal options for a user
+     * 
+     * @param userId The user ID to check eligibility
+     * @return Withdrawal options response with amounts, coins, eligibility, and processing time
+     */
+    public WithdrawalOptionsResponse getWithdrawalOptions(String userId) {
+        // Hardcoded amounts as per requirement (with 2 decimal places for consistency)
+        BigDecimal[] amounts = {
+            BigDecimal.valueOf(30.00),
+            BigDecimal.valueOf(90.00),
+            BigDecimal.valueOf(190.00),
+            BigDecimal.valueOf(500.00)
+        };
+        
+        // Get conversion rate from config
+        BigDecimal coinToRupeeRate = getCoinToRupeeRate();
+        
+        // Get default processing time from config
+        String defaultProcessingTime = getDefaultProcessingTime();
+        
+        List<WithdrawalOptionResponse> options = Stream.of(amounts)
+                .map(amount -> {
+                    // Calculate coins needed for this amount
+                    Integer coins = amount.multiply(coinToRupeeRate).intValue();
+                    
+                    // Format amount to match the stored format (2 decimal places)
+                    BigDecimal formattedAmount = amount.setScale(2, RoundingMode.HALF_UP);
+                    
+                    // Check if user has already withdrawn this specific amount
+                    boolean hasExistingWithdrawalForAmount = withdrawalRepository.existsByUserIdAndMoneyInRs(userId, formattedAmount);
+                    
+                    // User is eligible if they don't have an existing withdrawal for this specific amount
+                    boolean isEligible = !hasExistingWithdrawalForAmount;
+                    
+                    return WithdrawalOptionResponse.of(amount, coins, isEligible);
+                })
+                .collect(Collectors.toList());
+        
+        return WithdrawalOptionsResponse.of(options, defaultProcessingTime);
+    }
+    
+    /**
+     * Get coin to rupee conversion rate from config
+     */
+    private BigDecimal getCoinToRupeeRate() {
+        try {
+            String rateString = defaultConfigService.getByKey("1_rupee_equals_in_coins").getValue();
+            return new BigDecimal(rateString);
+        } catch (Exception e) {
+            // Fallback to default rate if config not found
+            return BigDecimal.valueOf(2);
+        }
+    }
+    
+    /**
+     * Get default processing time from config
+     */
+    private String getDefaultProcessingTime() {
+        try {
+            return defaultConfigService.getByKey("default_payment_processing_time").getValue();
+        } catch (Exception e) {
+            // Fallback to default processing time if config not found
+            return "3-5 business days";
+        }
     }
 } 

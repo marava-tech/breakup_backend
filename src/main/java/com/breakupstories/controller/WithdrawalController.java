@@ -21,6 +21,8 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.breakupstories.dto.WithdrawalOptionResponse;
+import com.breakupstories.dto.WithdrawalOptionsResponse;
 
 @RestController
 @RequestMapping("/api/withdrawals")
@@ -114,9 +116,28 @@ public class WithdrawalController {
         }
     }
     
+    @GetMapping("/options")
+    @Operation(summary = "Get withdrawal options", description = "Get available withdrawal options with amounts, coins, eligibility, and processing time for the authenticated user")
+    public ResponseEntity<Map<String, Object>> getWithdrawalOptions(Authentication authentication) {
+        try {
+            String email = authentication.getName();
+            String userId = userService.getUserEntityByEmail(email).getId();
+            
+            WithdrawalOptionsResponse response = withdrawalService.getWithdrawalOptions(userId);
+            return ResponseEntity.ok(Map.of("success", true, "data", response));
+            
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            errorResponse.put("message", "Failed to retrieve withdrawal options");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
+    
     @GetMapping("/my-withdrawals")
     @Operation(summary = "Get my withdrawals", description = "Retrieve paginated withdrawals for the authenticated user")
-    public ResponseEntity<Map<String, Object>> getMyWithdrawals(
+    public ResponseEntity<Map<String, Object>> getWithdrawals(
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {

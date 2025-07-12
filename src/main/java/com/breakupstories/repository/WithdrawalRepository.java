@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -25,4 +26,8 @@ public interface WithdrawalRepository extends MongoRepository<Withdrawal, String
     long countByStatus(Withdrawal.WithdrawalStatus status);
     
     long countByCreatedAtAfter(LocalDateTime dateTime);
+    
+    boolean existsByUserIdAndMoneyInRsIsNotNull(String userId);
+    
+    boolean existsByUserIdAndMoneyInRs(String userId, BigDecimal moneyInRs);
 } 

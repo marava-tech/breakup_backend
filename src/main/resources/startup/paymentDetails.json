@@ -1,0 +1,8 @@
+[
+    {
+        "key": "default_payment_processing_time",
+        "value": "24 hours",
+        "description": "Default payment processing time in minutes",
+        "active": true
+      }
+]
