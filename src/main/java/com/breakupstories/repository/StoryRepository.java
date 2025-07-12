@@ -27,6 +27,10 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     
     Page<Story> findByLanguageAndStatus(String language, Story.StoryStatus status, Pageable pageable);
     
+    Page<Story> findByLanguageAndStatusOrderByCreatedAtDesc(String language, Story.StoryStatus status, Pageable pageable);
+    
+    Page<Story> findByLanguageAndStatusOrderByViewCountDesc(String language, Story.StoryStatus status, Pageable pageable);
+    
     // Custom query for filtering stories with multiple criteria
     @Query("{'status': 'ACTIVE', " +
            "'$and': [" +

@@ -5,6 +5,7 @@ import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.RequestIdResponse;
 import com.breakupstories.dto.StoryResponse;
 import com.breakupstories.dto.ConsolingMessageResponse;
+import com.breakupstories.dto.WrittenStoryRequest;
 import com.breakupstories.enums.StorySearchType;
 import com.breakupstories.model.Story;
 import com.breakupstories.model.User;
@@ -53,7 +54,8 @@ public class StoryController {
     @Operation(summary = "Create a new story", description = "Upload a new story with content, tags, and metadata")
     public ResponseEntity<RequestIdResponse<StoryResponse>> createStory(
             Authentication authentication,
-            MultipartHttpServletRequest request) {
+            MultipartHttpServletRequest request,
+            @RequestParam(required = false) String creationType) {
 
         String requestId = RequestContext.getRequestId();
         log.info("Story creation request received [RequestID: {}]", requestId);
@@ -81,7 +83,7 @@ public class StoryController {
         String email = authentication.getName();
         User user = userService.getUserEntityByEmail(email);
         if(ObjectUtils.isEmpty(user)) throw new RuntimeException("user not logged in");
-        StoryResponse response = storyService.createStory(user, request, uploadMetadata);
+        StoryResponse response = storyService.createStory(user, request, uploadMetadata, creationType);
         
         RequestIdResponse<StoryResponse> requestIdResponse = RequestIdResponse.of(response, "Story creation initiated successfully");
         log.info("Story creation response sent [RequestID: {}]", requestId);
@@ -89,20 +91,73 @@ public class StoryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(requestIdResponse);
     }
     
+    @PostMapping("/written")
+    @Operation(summary = "Create a written story", description = "Create a new story from written text")
+    public ResponseEntity<RequestIdResponse<StoryResponse>> createWrittenStory(
+            Authentication authentication,
+            @RequestBody WrittenStoryRequest request) {
+
+        String requestId = RequestContext.getRequestId();
+        log.info("Written story creation request received [RequestID: {}]", requestId);
+        
+        // Extract location coordinates from headers (if available)
+        String latitude = null;
+        String longitude = null;
+        String deviceInfo = "Unknown";
+        
+        // Extract device info from request context
+        ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
+        if (clientInfo != null) {
+            deviceInfo = clientInfo.getUserAgent();
+        }
+
+        Map<String,String> uploadMetadata = new HashMap<>();
+        uploadMetadata.put("lat", latitude);
+        uploadMetadata.put("long", longitude);
+        uploadMetadata.put("deviceInfo", deviceInfo);
+        
+        String email = authentication.getName();
+        User user = userService.getUserEntityByEmail(email);
+        if(ObjectUtils.isEmpty(user)) throw new RuntimeException("user not logged in");
+        
+        StoryResponse response = storyService.createWrittenStory(user, request, uploadMetadata);
+        
+        RequestIdResponse<StoryResponse> requestIdResponse = RequestIdResponse.of(response, "Written story creation initiated successfully");
+        log.info("Written story creation response sent [RequestID: {}]", requestId);
+        
+        return ResponseEntity.status(HttpStatus.CREATED).body(requestIdResponse);
+    }
+    
     @GetMapping
-    @Operation(summary = "Get all stories", description = "Retrieve paginated list of active stories")
+    @Operation(summary = "Get all stories", description = "Retrieve paginated list of active stories with automatic language filtering")
     public ResponseEntity<PagedResponse<StoryResponse>> getStories(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String language,
             Authentication authentication) {
         
         PagedResponse<StoryResponse> response;
         if (authentication != null && authentication.isAuthenticated()) {
             String email = authentication.getName();
-            String userId = userService.getUserEntityByEmail(email).getId();
-            response = storyService.getStories(userId, page, size);
+            User user = userService.getUserEntityByEmail(email);
+            String userId = user.getId();
+            String userPreferredLanguage = user.getPreferredStoryLanguage();
+            
+            // Use provided language or user's preferred language
+            String filterLanguage = (language != null && !language.trim().isEmpty()) ? language : userPreferredLanguage;
+            
+            if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                response = storyService.getStoriesByLanguage(filterLanguage, userId, page, size);
+            } else {
+                response = storyService.getStories(userId, page, size);
+            }
         } else {
-            response = storyService.getStories(page, size);
+            // For unauthenticated users, use provided language if available
+            if (language != null && !language.trim().isEmpty()) {
+                response = storyService.getStoriesByLanguage(language, page, size);
+            } else {
+                response = storyService.getStories(page, size);
+            }
         }
         
         return ResponseEntity.ok(response);
@@ -110,7 +165,7 @@ public class StoryController {
 
 
     @GetMapping("/type")
-    @Operation(summary = "Get stories by search type", description = "Retrieve paginated list of stories based on search type")
+    @Operation(summary = "Get stories by search type", description = "Retrieve paginated list of stories based on search type with automatic language filtering")
     public ResponseEntity<PagedResponse<StoryResponse>> getStoriesByType(
             @RequestParam StorySearchType searchType,
             @RequestParam(defaultValue = "0") int page,
@@ -124,23 +179,44 @@ public class StoryController {
         
         if (authentication != null && authentication.isAuthenticated()) {
             String email = authentication.getName();
-            String userId = userService.getUserEntityByEmail(email).getId();
+            User user = userService.getUserEntityByEmail(email);
+            String userId = user.getId();
+            String userPreferredLanguage = user.getPreferredStoryLanguage();
+            
+            // Use provided language or user's preferred language
+            String filterLanguage = (language != null && !language.trim().isEmpty()) ? language : userPreferredLanguage;
             
             switch (searchType) {
                 case FOR_YOU -> {
-                    response = storyService.getForYouStories(userId, page, size);
+                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                        response = storyService.getForYouStoriesByLanguage(filterLanguage, userId, page, size);
+                    } else {
+                        response = storyService.getForYouStories(userId, page, size);
+                    }
                 }
                 case NEAR_ME -> {
-                    response = storyService.getNearbyStories(userId, request,page, size);
+                    response = storyService.getNearbyStories(userId, request, page, size);
                 }
                 case TRENDING -> {
-                    response = storyService.getTrendingStories(userId, page, size);
+                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                        response = storyService.getTrendingStoriesByLanguage(filterLanguage, userId, page, size);
+                    } else {
+                        response = storyService.getTrendingStories(userId, page, size);
+                    }
                 }
                 case SIMILAR -> {
-                    response = storyService.getSimilarStories(storyId, page, size);
+                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                        response = storyService.getSimilarStoriesByLanguage(filterLanguage, userId, page, size);
+                    } else {
+                        response = storyService.getSimilarStories(userId, page, size);
+                    }
                 }
                 case LATEST -> {
-                    response = storyService.getLatestStories(userId, page, size);
+                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                        response = storyService.getLatestStoriesByLanguage(filterLanguage, userId, page, size);
+                    } else {
+                        response = storyService.getLatestStories(userId, page, size);
+                    }
                 }
                 case LANGUAGE -> {
                     if (language != null && !language.trim().isEmpty()) {
@@ -150,18 +226,36 @@ public class StoryController {
                     }
                 }
                 case GENERAL -> {
-                    response = storyService.getStories(userId, page, size);
+                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                        response = storyService.getStoriesByLanguage(filterLanguage, userId, page, size);
+                    } else {
+                        response = storyService.getStories(userId, page, size);
+                    }
                 }
-                default -> response = storyService.getStories(userId, page, size);
+                default -> {
+                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                        response = storyService.getStoriesByLanguage(filterLanguage, userId, page, size);
+                    } else {
+                        response = storyService.getStories(userId, page, size);
+                    }
+                }
             }
         } else {
-            // For unauthenticated users
+            // For unauthenticated users - no language filtering by default
             switch (searchType) {
                 case TRENDING -> {
-                    response = storyService.getTrendingStories(page, size);
+                    if (language != null && !language.trim().isEmpty()) {
+                        response = storyService.getTrendingStoriesByLanguage(language, page, size);
+                    } else {
+                        response = storyService.getTrendingStories(page, size);
+                    }
                 }
                 case LATEST -> {
-                    response = storyService.getLatestStories(page, size);
+                    if (language != null && !language.trim().isEmpty()) {
+                        response = storyService.getLatestStoriesByLanguage(language, page, size);
+                    } else {
+                        response = storyService.getLatestStories(page, size);
+                    }
                 }
                 case LANGUAGE -> {
                     if (language != null && !language.trim().isEmpty()) {
