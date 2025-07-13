@@ -3,24 +3,21 @@ package com.breakupstories.service;
 import com.breakupstories.dto.DefaultConfigRequest;
 import com.breakupstories.dto.DefaultConfigResponse;
 import com.breakupstories.dto.PagedResponse;
-import com.breakupstories.model.DefaultConfig;
-import com.breakupstories.dto.RecStartAudioResponse;
 import com.breakupstories.dto.QuoteResponse;
-
+import com.breakupstories.model.DefaultConfig;
 import com.breakupstories.repository.DefaultConfigRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.Collections;
 import java.util.ArrayList;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -80,20 +77,54 @@ public class DefaultConfigService {
                 .collect(Collectors.toList());
         return PagedResponse.of(configs, page, size, configPage.getTotalElements());
     }
+    
+
+    /**
+     * Search configs by key containing the search term with pagination (case-insensitive)
+     *
+     * @param searchTerm The search term to look for in config keys (optional)
+     * @param activeOnly Whether to return only active configs (default: false)
+     * @param page Page number (default: 0)
+     * @param size Page size (default: 10)
+     * @return Paged response of matching config responses
+     */
+    public PagedResponse<DefaultConfigResponse> searchByKeyWithPagination(String searchTerm, boolean activeOnly, int page, int size) {
+        try {
+            Page<DefaultConfig> configPage;
+            Pageable pageable = PageRequest.of(page, size);
+            
+            if (searchTerm == null || searchTerm.trim().isEmpty()) {
+                configPage = defaultConfigRepository.findByActive(activeOnly,pageable);
+            } else {
+                configPage = defaultConfigRepository.findByKeyContainingIgnoreCaseAndActive(searchTerm, activeOnly,pageable);
+            }
+            
+            List<DefaultConfigResponse> configs = configPage.getContent().stream()
+                    .map(DefaultConfigResponse::fromEntity)
+                    .collect(Collectors.toList());
+            
+            return PagedResponse.of(configs, page, size, configPage.getTotalElements());
+                    
+        } catch (Exception e) {
+            log.error("Error searching configs by key with pagination: {}", searchTerm, e);
+            return PagedResponse.of(List.of(), page, size, 0);
+        }
+    }
 
     /**
      * Get list of languages from the default configuration
+     *
      * @return List of language strings
      */
     public List<String> getLanguages() {
         try {
             DefaultConfig languagesConfig = defaultConfigRepository.findByKey("languages")
                     .orElseThrow(() -> new RuntimeException("Languages configuration not found"));
-            
+
             if (languagesConfig.getValue() == null || languagesConfig.getValue().trim().isEmpty()) {
                 return List.of();
             }
-            
+
             // Split the value by comma and trim whitespace
             return List.of(languagesConfig.getValue().split(","))
                     .stream()
@@ -107,34 +138,8 @@ public class DefaultConfigService {
     }
 
     /**
-     * Get recording start audio URL by language and gender
-     * @param language The language (will be converted to lowercase)
-     * @param gender The gender (will be converted to lowercase)
-     * @return RecStartAudioResponse containing the audio URL and metadata
-     */
-    public RecStartAudioResponse getRecStartAudio(String language, String gender) {
-        try {
-            // Convert to lowercase to match the key format
-            String lowerLanguage = language.toLowerCase();
-            String lowerGender = gender.toLowerCase();
-            String key = lowerLanguage + "_" + lowerGender + "_start_rec";
-            
-            DefaultConfig config = defaultConfigRepository.findByKey(key)
-                    .orElseThrow(() -> new RuntimeException("Recording start audio not found for language: " + language + " and gender: " + gender));
-            
-            return RecStartAudioResponse.builder()
-                    .audioUrl(config.getValue())
-                    .language(language)
-                    .gender(gender)
-                    .description(config.getDescription())
-                    .build();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to get recording start audio for language: " + language + " and gender: " + gender, e);
-        }
-    }
-
-    /**
      * Get all quote audios from default config
+     *
      * @return List of quote audio configurations
      */
     public List<DefaultConfig> getQuoteAudios() {
@@ -145,6 +150,7 @@ public class DefaultConfigService {
 
     /**
      * Get all quote images from default config
+     *
      * @return List of quote image configurations
      */
     public List<DefaultConfig> getQuoteImages() {
@@ -155,6 +161,7 @@ public class DefaultConfigService {
 
     /**
      * Get all quote texts from default config
+     *
      * @return List of quote text configurations
      */
     public List<DefaultConfig> getQuoteTexts() {
@@ -165,6 +172,7 @@ public class DefaultConfigService {
 
     /**
      * Get random quote combinations
+     *
      * @param limit Maximum number of combinations to return (default 10)
      * @return List of QuoteResponse with random combinations
      */
@@ -212,6 +220,7 @@ public class DefaultConfigService {
 
     /**
      * Extract number from key like "quote_audio_1" -> 1
+     *
      * @param key The key to extract number from
      * @return The extracted number
      */
@@ -226,13 +235,14 @@ public class DefaultConfigService {
 
     /**
      * Get default thumbnail URL from configuration
+     *
      * @return Default thumbnail URL
      */
     public String getDefaultThumbnailUrl() {
         try {
             DefaultConfig config = defaultConfigRepository.findByKey("default_thumbnail_url")
                     .orElseThrow(() -> new RuntimeException("Default thumbnail URL configuration not found"));
-            
+
             return config.getValue();
         } catch (Exception e) {
             // Return a fallback URL if configuration is not found
@@ -243,6 +253,7 @@ public class DefaultConfigService {
 
     /**
      * Get default story images from configuration
+     *
      * @return List of default story image URLs
      */
     public List<String> getDefaultStoryImages() {
@@ -250,36 +261,37 @@ public class DefaultConfigService {
             List<DefaultConfig> storyImageConfigs = defaultConfigRepository.findAll().stream()
                     .filter(config -> config.getKey().startsWith("default_story_image_") && config.isActive())
                     .collect(Collectors.toList());
-            
+
             if (storyImageConfigs.isEmpty()) {
                 log.warn("No default story images found in configuration");
                 return List.of();
             }
-            
+
             // Extract URLs from configurations
             List<String> storyImages = storyImageConfigs.stream()
                     .map(DefaultConfig::getValue)
                     .filter(url -> url != null && !url.trim().isEmpty())
                     .collect(Collectors.toList());
-            
+
             log.info("Found {} default story images", storyImages.size());
             return storyImages;
-            
+
         } catch (Exception e) {
             log.error("Failed to get default story images", e);
             return List.of();
         }
     }
-    
+
     /**
      * Get first story reward coins from configuration
+     *
      * @return First story reward coins
      */
     public int getFirstStoryRewardCoins() {
         try {
             DefaultConfig config = defaultConfigRepository.findByKey("first_story_5min_reward_coins")
                     .orElseThrow(() -> new RuntimeException("First story reward coins configuration not found"));
-            
+
             return Integer.parseInt(config.getValue());
         } catch (Exception e) {
             // Return default value if configuration is not found
@@ -287,16 +299,17 @@ public class DefaultConfigService {
             return 90;
         }
     }
-    
+
     /**
      * Get minimum duration in minutes for first story reward from configuration
+     *
      * @return Minimum duration in minutes
      */
     public int getFirstStoryMinDurationMinutes() {
         try {
             DefaultConfig config = defaultConfigRepository.findByKey("first_story_min_duration_minutes")
                     .orElseThrow(() -> new RuntimeException("First story min duration configuration not found"));
-            
+
             return Integer.parseInt(config.getValue());
         } catch (Exception e) {
             // Return default value if configuration is not found
@@ -312,7 +325,7 @@ public class DefaultConfigService {
     public void testDefaultStoryImages() {
         List<String> storyImages = getDefaultStoryImages();
         log.info("Default story images test - Found {} images: {}", storyImages.size(), storyImages);
-        
+
         if (storyImages.isEmpty()) {
             log.warn("No default story images found - please check defaultThumbnails.json configuration");
         } else {

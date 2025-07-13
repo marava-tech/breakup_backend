@@ -25,7 +25,7 @@ public class AuditController {
     private final AuditService auditService;
     
     @PostMapping
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Create a new audit entry", description = "Create a new audit entry for tracking changes")
     public ResponseEntity<AuditResponse> createAudit(@Valid @RequestBody AuditRequest request) {
         AuditResponse response = auditService.createAudit(request);
@@ -33,30 +33,34 @@ public class AuditController {
     }
     
     @GetMapping
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get all audits", description = "Retrieve paginated list of all audit entries")
     public ResponseEntity<PagedResponse<AuditResponse>> getAudits(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam( defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
         
-        PagedResponse<AuditResponse> response = auditService.getAudits(page, size);
+        PagedResponse<AuditResponse> response = auditService.getAudits(page, size, sortBy, sortOrder);
         return ResponseEntity.ok(response);
     }
     
     @GetMapping("/user/{userId}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get audits by user", description = "Retrieve paginated audit entries for a specific user")
     public ResponseEntity<PagedResponse<AuditResponse>> getAuditsByUser(
             @PathVariable String userId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
         
-        PagedResponse<AuditResponse> response = auditService.getAuditsByUser(userId, page, size);
+        PagedResponse<AuditResponse> response = auditService.getAuditsByUser(userId, page, size, sortBy, sortOrder);
         return ResponseEntity.ok(response);
     }
     
     @GetMapping("/entity-type/{entityType}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get audits by entity type", description = "Retrieve paginated audit entries by entity type")
     public ResponseEntity<PagedResponse<AuditResponse>> getAuditsByEntityType(
             @PathVariable Audit.EntityType entityType,
@@ -68,7 +72,7 @@ public class AuditController {
     }
     
     @GetMapping("/entity/{entityId}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get audits by entity ID", description = "Retrieve paginated audit entries for a specific entity")
     public ResponseEntity<PagedResponse<AuditResponse>> getAuditsByEntityId(
             @PathVariable String entityId,
@@ -80,7 +84,7 @@ public class AuditController {
     }
     
     @GetMapping("/action-type/{actionType}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get audits by action type", description = "Retrieve paginated audit entries by action type")
     public ResponseEntity<PagedResponse<AuditResponse>> getAuditsByActionType(
             @PathVariable Audit.ActionType actionType,
@@ -92,7 +96,7 @@ public class AuditController {
     }
     
     @GetMapping("/user/{userId}/entity-type/{entityType}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get audits by user and entity type", description = "Retrieve paginated audit entries for a specific user and entity type")
     public ResponseEntity<PagedResponse<AuditResponse>> getAuditsByUserAndEntityType(
             @PathVariable String userId,
@@ -105,7 +109,7 @@ public class AuditController {
     }
     
     @GetMapping("/analytics/story-views")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get story view analytics", description = "Get analytics for story views")
     public ResponseEntity<Map<String, Object>> getStoryViewAnalytics(
             @RequestParam(required = false) String storyId,
@@ -126,7 +130,7 @@ public class AuditController {
 
     
     @GetMapping("/analytics/user-activity")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get user activity analytics", description = "Get analytics for user activity")
     public ResponseEntity<Map<String, Object>> getUserActivityAnalytics(
             @RequestParam(required = false) String userId,
@@ -147,7 +151,7 @@ public class AuditController {
     }
     
     @GetMapping("/{auditId}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get audit by ID", description = "Retrieve a specific audit entry by its ID")
     public ResponseEntity<AuditResponse> getAuditById(@PathVariable String auditId) {
         AuditResponse response = auditService.getAuditById(auditId);
@@ -155,7 +159,7 @@ public class AuditController {
     }
     
     @DeleteMapping("/{auditId}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Delete audit", description = "Delete an audit entry by its ID")
     public ResponseEntity<Void> deleteAudit(@PathVariable String auditId) {
         auditService.deleteAudit(auditId);

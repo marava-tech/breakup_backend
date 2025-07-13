@@ -118,10 +118,10 @@ public class MockAIService implements AIService {
         );
         
         List<String> mockTags = Arrays.asList("love", "story", "emotion", "relationship", "breakup");
-        List<String> mockLocations = Arrays.asList("Unknown Location");
+        List<String> mockLocations = List.of("Unknown Location");
         List<String> mockNames = new ArrayList<>();
         List<String> mockThemes = Arrays.asList("love", "emotion", "relationship");
-        List<String> mockCulturalElements = Arrays.asList("General cultural elements");
+        List<String> mockCulturalElements = List.of("General cultural elements");
         
         // Create mock story analysis
         StoryAnalysis mockAnalysis = StoryAnalysis.builder()

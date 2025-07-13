@@ -8,6 +8,7 @@ import com.breakupstories.dto.CommentResponse;
 import com.breakupstories.dto.StorySearchRequest;
 import com.breakupstories.dto.StorySearchResponse;
 import com.breakupstories.dto.StoryWithTrendingScore;
+import com.breakupstories.dto.TranscriptionResponse;
 import com.breakupstories.model.Story;
 import com.breakupstories.model.StoryDataStore;
 import com.breakupstories.model.StoryMetadata;
@@ -30,6 +31,7 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.breakupstories.util.TimestampUtil;
+import com.breakupstories.dto.WrittenStoryRequest;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.HashMap;
@@ -50,10 +52,9 @@ public class StoryService {
     @Lazy
     private final BookmarkService bookmarkService;
     private final StoryDataStoreService storyDataStoreService;
-    private final ClientInfoService clientInfoService;
     private final DefaultConfigService defaultConfigService;
 
-    public StoryResponse createStory(User user, MultipartHttpServletRequest request, Map<String,String> uploadMetadata) {
+    public StoryResponse createStory(User user, MultipartHttpServletRequest request, Map<String,String> uploadMetadata, String creationType) {
         String requestId = RequestContext.getRequestId();
         String userId = user.getId();
         log.info("Creating story for user: {} [RequestID: {}]", userId, requestId);
@@ -91,6 +92,19 @@ public class StoryService {
                 throw new RuntimeException("Failed to store audio file: " + e.getMessage(), e);
             }
             
+            // Determine creation type
+            Story.CreationType storyCreationType = Story.CreationType.UPLOADED; // Default
+            if (creationType != null && !creationType.trim().isEmpty()) {
+                try {
+                    storyCreationType = Story.CreationType.valueOf(creationType.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid creation type provided: {}. Using default UPLOADED [RequestID: {}]", creationType, requestId);
+                }
+            }
+            
+            // Store creation type in upload metadata
+            uploadMetadata.put("creationType", storyCreationType.name());
+            
             // Step 3: Create initial Story with UPLOAD_PENDING status
             Story story = Story.builder()
                     .userId(userId)
@@ -102,6 +116,7 @@ public class StoryService {
                     .status(Story.StoryStatus.UPLOAD_PENDING) // Initial status
                     .contents(new ArrayList<>()) // Will be populated after AI processing
                     .rejectionReasons(new ArrayList<>()) // Will be populated if AI processing fails
+                    .creationType(storyCreationType) // Use determined creation type
                     .build();
             
             Story savedStory = storyRepository.save(story);
@@ -116,8 +131,8 @@ public class StoryService {
                     .language(user.getPreferredStoryLanguage())
                     .processingStatus(StoryDataStore.ProcessingStatus.UPLOAD_PENDING)
                     .uploadMetadata(uploadMetadata)
-                                    .createdAt(TimestampUtil.currentLocalDateTime())
-                .updatedAt(TimestampUtil.currentLocalDateTime())
+                    .createdAt(TimestampUtil.currentLocalDateTime())
+                    .updatedAt(TimestampUtil.currentLocalDateTime())
                     .build();
             
             StoryDataStore savedDataStore = storyDataStoreRepository.save(dataStore);
@@ -129,6 +144,86 @@ public class StoryService {
         } catch (Exception e) {
             log.error("Error creating story for user {}: {} [RequestID: {}]", userId, e.getMessage(), requestId, e);
             throw new RuntimeException("Failed to create story: " + e.getMessage(), e);
+        }
+    }
+
+    public StoryResponse createWrittenStory(User user, WrittenStoryRequest request, Map<String,String> uploadMetadata) {
+        String requestId = RequestContext.getRequestId();
+        String userId = user.getId();
+        log.info("Creating written story for user: {} [RequestID: {}]", userId, requestId);
+        
+        try {
+            // Step 1: Validate request
+            if (request.getStoryText() == null || request.getStoryText().trim().isEmpty()) {
+                throw new IllegalArgumentException("Story text is required");
+            }
+            
+            if (request.getLanguage() == null || request.getLanguage().trim().isEmpty()) {
+                throw new IllegalArgumentException("Language is required");
+            }
+            
+            log.info("Starting written story creation for user: {} with text length: {} [RequestID: {}]", 
+                userId, request.getStoryText().length(), requestId);
+            
+            // Step 2: Store story text and metadata for background processing
+            if (uploadMetadata == null) {
+                uploadMetadata = new HashMap<>();
+            }
+            
+            // Store story text and metadata for background processing
+            uploadMetadata.put("storyText", request.getStoryText());
+            uploadMetadata.put("storyLanguage", request.getLanguage());
+            uploadMetadata.put("creationType", "WRITTEN");
+            
+            // Step 3: Create initial Story with PROCESSING_PENDING status (no upload needed)
+            Story story = Story.builder()
+                    .userId(userId)
+                    .title("Processing....") // Will be updated after AI processing
+                    .audioUrl(null) // Will be set after audio generation
+                    .thumbnailUrl(defaultConfigService.getDefaultThumbnailUrl())
+                    .storyImages(defaultConfigService.getDefaultStoryImages())
+                    .viewCount(0L)
+                    .status(Story.StoryStatus.PROCESSING_PENDING) // Skip upload step
+                    .contents(new ArrayList<>()) // Will be populated after AI processing
+                    .rejectionReasons(new ArrayList<>()) // Will be populated if AI processing fails
+                    .creationType(Story.CreationType.WRITTEN)
+                    .language(request.getLanguage())
+                    .build();
+            
+            Story savedStory = storyRepository.save(story);
+            String storyId = savedStory.getId();
+            log.info("Initial written story created with ID: {} for user: {} [RequestID: {}]", storyId, userId, requestId);
+            
+            // Step 4: Create TranscriptionResponse with user-entered text
+            TranscriptionResponse transcriptionResponse = TranscriptionResponse.builder()
+                    .transcript(request.getStoryText())
+                    .language(request.getLanguage())
+                    .confidence(1.0) // Set confidence to 1 for written stories
+                    .build();
+            
+            // Step 5: Create StoryDataStore with PROCESSING_PENDING status and transcription response
+            StoryDataStore dataStore = StoryDataStore.builder()
+                    .id(storyId)
+                    .storyId(storyId)
+                    .userId(userId)
+                    .language(request.getLanguage())
+                    .processingStatus(StoryDataStore.ProcessingStatus.PROCESSING_PENDING) // Skip upload step
+                    .uploadMetadata(uploadMetadata)
+                    .transcriptionResponse(transcriptionResponse) // Store the transcription response
+                    .transcriptionCompletedAt(TimestampUtil.currentLocalDateTime()) // Mark transcription as completed
+                    .createdAt(TimestampUtil.currentLocalDateTime())
+                    .updatedAt(TimestampUtil.currentLocalDateTime())
+                    .build();
+            
+            StoryDataStore savedDataStore = storyDataStoreRepository.save(dataStore);
+            log.info("StoryDataStore created for written story with ID: {} for user: {} [RequestID: {}]",
+                    savedDataStore.getId(), userId, requestId);
+            
+            return StoryResponse.fromStory(savedStory, user);
+            
+        } catch (Exception e) {
+            log.error("Error creating written story for user {}: {} [RequestID: {}]", userId, e.getMessage(), requestId, e);
+            throw new RuntimeException("Failed to create written story: " + e.getMessage(), e);
         }
     }
 
@@ -209,7 +304,7 @@ public class StoryService {
             log.info("Returning {} trending stories for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) storiesWithScores.size());
+            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
             
         } catch (Exception e) {
             log.error("Error getting trending stories [RequestID: {}]: {}", requestId, e.getMessage(), e);
@@ -281,7 +376,7 @@ public class StoryService {
             log.info("Returning {} trending stories for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) storiesWithScores.size());
+            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
             
         } catch (Exception e) {
             log.error("Error getting trending stories for user {} [RequestID: {}]: {}", 
@@ -294,6 +389,32 @@ public class StoryService {
     public PagedResponse<StoryResponse> getForYouStories(String currentUserId,int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByStatusOrderByViewCountDesc(Story.StoryStatus.ACTIVE, pageable);
+
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get for you stories by language sorted by view count (for authenticated users)
+     * @param language The language to filter by
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of for you stories in the specified language with user context
+     */
+    public PagedResponse<StoryResponse> getForYouStoriesByLanguage(String language, String currentUserId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByViewCountDesc(language, Story.StoryStatus.ACTIVE, pageable);
 
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -438,7 +559,7 @@ public class StoryService {
             log.info("Returning {} nearby stories for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) nearbyStories.size());
+            return PagedResponse.of(paginatedStories, page, size, nearbyStories.size());
             
         } catch (com.breakupstories.exception.LocationNotProvidedException e) {
             log.error("Location not provided for nearby stories [RequestID: {}]: {}", requestId, e.getMessage());
@@ -455,6 +576,32 @@ public class StoryService {
     public PagedResponse<StoryResponse> getSimilarStories(String currentUserId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByStatusOrderByViewCountDesc(Story.StoryStatus.ACTIVE, pageable);
+
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get similar stories by language sorted by view count (for authenticated users)
+     * @param language The language to filter by
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of similar stories in the specified language with user context
+     */
+    public PagedResponse<StoryResponse> getSimilarStoriesByLanguage(String language, String currentUserId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByViewCountDesc(language, Story.StoryStatus.ACTIVE, pageable);
 
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -559,7 +706,7 @@ public class StoryService {
         boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, storyId);
         
         long likeCount = getLikeCount(storyId);
-        long commentCount = getCommentCount(storyId);
+        long commentCount = getCommentCount(story.getId());
         
         return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
     }
@@ -571,7 +718,7 @@ public class StoryService {
         User user = userService.getUserEntityById(story.getUserId());
         
         long likeCount = getLikeCount(storyId);
-        long commentCount = getCommentCount(storyId);
+        long commentCount = getCommentCount(story.getId());
         
         return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount); // Default to false when no user context
     }
@@ -729,27 +876,6 @@ public class StoryService {
     }
 
     /**
-     * Get stories by user's preferred language
-     * @param currentUserId The current user ID
-     * @param page Page number
-     * @param size Page size
-     * @return PagedResponse of stories in the user's preferred language
-     */
-    public PagedResponse<StoryResponse> getStoriesByUserPreferredLanguage(String currentUserId, int page, int size) {
-        // Get user's preferred language
-        User user = userService.getUserEntityById(currentUserId);
-        String preferredLanguage = user.getPreferredStoryLanguage();
-        
-        if (preferredLanguage == null || preferredLanguage.trim().isEmpty()) {
-            // If no preferred language, return all stories
-            return getStories(currentUserId, page, size);
-        }
-        
-        // Get stories by preferred language
-        return getStoriesByLanguage(preferredLanguage, currentUserId, page, size);
-    }
-    
-    /**
      * Get latest stories sorted by creation date (newest first)
      * @param currentUserId The current user ID
      * @param page Page number
@@ -790,6 +916,55 @@ public class StoryService {
                     long likeCount = getLikeCount(story.getId());
                     long commentCount = getCommentCount(story.getId());
                     return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get latest stories by language sorted by creation date (newest first) - for unauthenticated users
+     * @param language The language to filter by
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of latest stories in the specified language
+     */
+    public PagedResponse<StoryResponse> getLatestStoriesByLanguage(String language, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByCreatedAtDesc(language, Story.StoryStatus.ACTIVE, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get latest stories by language sorted by creation date (newest first) - for authenticated users
+     * @param language The language to filter by
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of latest stories in the specified language with user context
+     */
+    public PagedResponse<StoryResponse> getLatestStoriesByLanguage(String language, String currentUserId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByCreatedAtDesc(language, Story.StoryStatus.ACTIVE, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
                 })
                 .collect(Collectors.toList());
         
@@ -1026,7 +1201,7 @@ public class StoryService {
             log.info("Returning {} trending stories for page {} with custom weights [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) storiesWithScores.size());
+            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
             
         } catch (Exception e) {
             log.error("Error getting trending stories with custom weights [RequestID: {}]: {}", 
@@ -1119,7 +1294,7 @@ public class StoryService {
             log.info("Returning {} search results for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) matchingStories.size());
+            return PagedResponse.of(paginatedStories, page, size, matchingStories.size());
             
         } catch (Exception e) {
             log.error("Error searching stories by title and tags [RequestID: {}]: {}", requestId, e.getMessage(), e);
@@ -1227,11 +1402,157 @@ public class StoryService {
             log.info("Returning {} search results for page {} [RequestID: {}]", 
                     paginatedStories.size(), page, requestId);
             
-            return PagedResponse.of(paginatedStories, page, size, (long) matchingStories.size());
+            return PagedResponse.of(paginatedStories, page, size, matchingStories.size());
             
         } catch (Exception e) {
             log.error("Error searching stories by content [RequestID: {}]: {}", requestId, e.getMessage(), e);
             throw new RuntimeException("Failed to search stories: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Get trending stories by language sorted by trending score (for unauthenticated users)
+     * Trending score = (likes * 1.0) + (views * 0.4) + (comments * 0.6)
+     * @param language The language to filter by
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of trending stories in the specified language
+     */
+    public PagedResponse<StoryResponse> getTrendingStoriesByLanguage(String language, int page, int size) {
+        String requestId = RequestContext.getRequestId();
+        log.info("Getting trending stories by language for unauthenticated user - language: {} [RequestID: {}]", language, requestId);
+        
+        try {
+            // Get all active stories by language
+            Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE, PageRequest.of(0, Integer.MAX_VALUE));
+            List<Story> allActiveStories = storyPage.getContent();
+            
+            // Calculate trending scores and create StoryWithTrendingScore objects
+            List<StoryWithTrendingScore> storiesWithScores = allActiveStories.stream()
+                    .map(story -> {
+                        try {
+                            long likeCount = getLikeCount(story.getId());
+                            long viewCount = story.getViewCount() != null ? story.getViewCount() : 0L;
+                            long commentCount = getCommentCount(story.getId());
+                            
+                            return StoryWithTrendingScore.fromStory(story, likeCount, viewCount, commentCount);
+                        } catch (Exception e) {
+                            log.warn("Error calculating trending score for story {} [RequestID: {}]: {}", 
+                                    story.getId(), requestId, e.getMessage());
+                            return null;
+                        }
+                    })
+                    .filter(storyWithScore -> storyWithScore != null)
+                    .sorted((s1, s2) -> Double.compare(s2.getTrendingScore(), s1.getTrendingScore())) // Sort by trending score descending
+                    .collect(Collectors.toList());
+            
+            log.info("Calculated trending scores for {} stories in language {} [RequestID: {}]", storiesWithScores.size(), language, requestId);
+            
+            // Apply pagination
+            int startIndex = page * size;
+            int endIndex = Math.min(startIndex + size, storiesWithScores.size());
+            
+            List<StoryResponse> paginatedStories = storiesWithScores.stream()
+                    .skip(startIndex)
+                    .limit(size)
+                    .map(storyWithScore -> {
+                        try {
+                            Story story = storyWithScore.getStory();
+                            User user = userService.getUserEntityById(story.getUserId());
+                            return StoryResponse.fromStory(story, user, false, false, 
+                                    storyWithScore.getLikeCount(), storyWithScore.getCommentCount());
+                        } catch (Exception e) {
+                            log.error("Error creating StoryResponse for trending story {} [RequestID: {}]: {}", 
+                                    storyWithScore.getStory().getId(), requestId, e.getMessage());
+                            return null;
+                        }
+                    })
+                    .filter(story -> story != null)
+                    .collect(Collectors.toList());
+            
+            log.info("Returning {} trending stories in language {} for page {} [RequestID: {}]", 
+                    paginatedStories.size(), language, page, requestId);
+            
+            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
+            
+        } catch (Exception e) {
+            log.error("Error getting trending stories by language {} [RequestID: {}]: {}", language, requestId, e.getMessage(), e);
+            throw new RuntimeException("Failed to get trending stories by language: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Get trending stories by language sorted by trending score (for authenticated users)
+     * Trending score = (likes * 1.0) + (views * 0.4) + (comments * 0.6)
+     * @param language The language to filter by
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of trending stories in the specified language with user context
+     */
+    public PagedResponse<StoryResponse> getTrendingStoriesByLanguage(String language, String currentUserId, int page, int size) {
+        String requestId = RequestContext.getRequestId();
+        log.info("Getting trending stories by language for user: {} - language: {} [RequestID: {}]", currentUserId, language, requestId);
+        
+        try {
+            // Get all active stories by language
+            Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE, PageRequest.of(0, Integer.MAX_VALUE));
+            List<Story> allActiveStories = storyPage.getContent();
+            
+            // Calculate trending scores and create StoryWithTrendingScore objects
+            List<StoryWithTrendingScore> storiesWithScores = allActiveStories.stream()
+                    .map(story -> {
+                        try {
+                            long likeCount = getLikeCount(story.getId());
+                            long viewCount = story.getViewCount() != null ? story.getViewCount() : 0L;
+                            long commentCount = getCommentCount(story.getId());
+                            
+                            return StoryWithTrendingScore.fromStory(story, likeCount, viewCount, commentCount);
+                        } catch (Exception e) {
+                            log.warn("Error calculating trending score for story {} [RequestID: {}]: {}", 
+                                    story.getId(), requestId, e.getMessage());
+                            return null;
+                        }
+                    })
+                    .filter(storyWithScore -> storyWithScore != null)
+                    .sorted((s1, s2) -> Double.compare(s2.getTrendingScore(), s1.getTrendingScore())) // Sort by trending score descending
+                    .collect(Collectors.toList());
+            
+            log.info("Calculated trending scores for {} stories in language {} [RequestID: {}]", storiesWithScores.size(), language, requestId);
+            
+            // Apply pagination
+            int startIndex = page * size;
+            int endIndex = Math.min(startIndex + size, storiesWithScores.size());
+            
+            List<StoryResponse> paginatedStories = storiesWithScores.stream()
+                    .skip(startIndex)
+                    .limit(size)
+                    .map(storyWithScore -> {
+                        try {
+                            Story story = storyWithScore.getStory();
+                            User user = userService.getUserEntityById(story.getUserId());
+                            boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                            boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                            return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, 
+                                    storyWithScore.getLikeCount(), storyWithScore.getCommentCount());
+                        } catch (Exception e) {
+                            log.error("Error creating StoryResponse for trending story {} [RequestID: {}]: {}", 
+                                    storyWithScore.getStory().getId(), requestId, e.getMessage());
+                            return null;
+                        }
+                    })
+                    .filter(story -> story != null)
+                    .collect(Collectors.toList());
+            
+            log.info("Returning {} trending stories in language {} for page {} [RequestID: {}]", 
+                    paginatedStories.size(), language, page, requestId);
+            
+            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
+            
+        } catch (Exception e) {
+            log.error("Error getting trending stories by language {} for user {} [RequestID: {}]: {}", 
+                    language, currentUserId, requestId, e.getMessage(), e);
+            throw new RuntimeException("Failed to get trending stories by language: " + e.getMessage(), e);
         }
     }
 } 

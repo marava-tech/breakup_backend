@@ -49,7 +49,7 @@ public class StoryMatchingService {
         }
         
         public static class StoryMatchResultBuilder {
-            private StoryMatchResult result = new StoryMatchResult();
+            private final StoryMatchResult result = new StoryMatchResult();
             
             public StoryMatchResultBuilder originalStoryId(String originalStoryId) {
                 result.originalStoryId = originalStoryId;

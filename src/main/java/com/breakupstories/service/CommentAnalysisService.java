@@ -56,7 +56,7 @@ public class CommentAnalysisService {
             for (Comment comment : recentComments) {
                 try {
                     var user = userRepository.findById(comment.getUserId()).orElse(null);
-                    if(ObjectUtils.isEmpty(user)) continue;;
+                    if(ObjectUtils.isEmpty(user)) continue;
                     var abuseDetectionResponse = retryableAIService.detectAbuse(comment.getText(),user.getPreferredStoryLanguage());
                     comment.setAbusive(abuseDetectionResponse.getIs_abusive());
                     comment.setExplanation(abuseDetectionResponse.getExplanation());

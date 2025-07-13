@@ -49,6 +49,7 @@ public class Feedback {
         PENDING,    // New feedback, not yet reviewed
         IN_REVIEW,  // Being reviewed by admin
         RESOLVED,   // Issue resolved or suggestion implemented
+        VALUED,
         CLOSED,     // Feedback closed without action
         REJECTED    // Feedback rejected
     }

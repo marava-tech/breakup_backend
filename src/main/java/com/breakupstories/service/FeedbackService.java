@@ -151,12 +151,11 @@ public class FeedbackService {
     }
     
     // Admin method to update feedback status and add response
-    public FeedbackResponse updateFeedbackStatus(String feedbackId, Feedback.FeedbackStatus status, String adminResponse) {
+    public FeedbackResponse updateFeedbackStatus(String feedbackId, Feedback.FeedbackStatus status) {
         Feedback feedback = feedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new RuntimeException("Feedback not found with ID: " + feedbackId));
         
         feedback.setStatus(status);
-        feedback.setAdminResponse(adminResponse);
         
         Feedback updatedFeedback = feedbackRepository.save(feedback);
         
@@ -174,6 +173,24 @@ public class FeedbackService {
         return enrichFeedbackResponse(updatedFeedback);
     }
     
+    // Admin method to submit admin response and update status to IN_REVIEW if currently PENDING
+    public FeedbackResponse submitAdminResponse(String feedbackId, String adminResponse) {
+        Feedback feedback = feedbackRepository.findById(feedbackId)
+                .orElseThrow(() -> new RuntimeException("Feedback not found with ID: " + feedbackId));
+        
+        // Set the admin response
+        feedback.setAdminResponse(adminResponse);
+        
+        // Update status to IN_REVIEW if currently PENDING
+        if (feedback.getStatus() == Feedback.FeedbackStatus.PENDING) {
+            feedback.setStatus(Feedback.FeedbackStatus.IN_REVIEW);
+        }
+        
+        Feedback updatedFeedback = feedbackRepository.save(feedback);
+        
+        return enrichFeedbackResponse(updatedFeedback);
+    }
+    
     public void deleteFeedback(String feedbackId, String userId) {
         Feedback feedback = feedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new RuntimeException("Feedback not found with ID: " + feedbackId));
@@ -186,8 +203,85 @@ public class FeedbackService {
         feedbackRepository.deleteById(feedbackId);
     }
     
+    // Comprehensive filtering method
+    public PagedResponse<FeedbackResponse> getFeedbacksWithFilters(
+            int page, int size, String userId, String storyId, String type, 
+            String status, String feedbackId, String sortBy, String sortOrder) {
+        
+        // Create pageable with sorting
+        Sort.Direction direction = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        
+        Page<Feedback> feedbackPage;
+        
+        // Parse type if provided
+        Feedback.FeedbackType typeFilter = null;
+        if (type != null && !type.trim().isEmpty()) {
+            try {
+                typeFilter = Feedback.FeedbackType.valueOf(type.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid type parameter: " + type);
+            }
+        }
+        
+        // Parse status if provided
+        Feedback.FeedbackStatus statusFilter = null;
+        if (status != null && !status.trim().isEmpty()) {
+            try {
+                statusFilter = Feedback.FeedbackStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid status parameter: " + status);
+            }
+        }
+        
+        // Apply filters based on provided parameters
+        if (feedbackId != null && !feedbackId.trim().isEmpty()) {
+            // If feedbackId is provided, use it exclusively
+            feedbackPage = feedbackRepository.findByIdWithPagination(feedbackId, pageable);
+        } else if (userId != null && storyId != null && typeFilter != null && statusFilter != null) {
+            feedbackPage = feedbackRepository.findByUserIdAndStoryIdAndTypeAndStatus(userId, storyId, typeFilter, statusFilter, pageable);
+        } else if (userId != null && storyId != null && typeFilter != null) {
+            feedbackPage = feedbackRepository.findByUserIdAndStoryIdAndType(userId, storyId, typeFilter, pageable);
+        } else if (userId != null && storyId != null && statusFilter != null) {
+            feedbackPage = feedbackRepository.findByUserIdAndStoryIdAndStatus(userId, storyId, statusFilter, pageable);
+        } else if (userId != null && typeFilter != null && statusFilter != null) {
+            feedbackPage = feedbackRepository.findByUserIdAndTypeAndStatus(userId, typeFilter, statusFilter, pageable);
+        } else if (storyId != null && typeFilter != null && statusFilter != null) {
+            feedbackPage = feedbackRepository.findByStoryIdAndTypeAndStatus(storyId, typeFilter, statusFilter, pageable);
+        } else if (userId != null && storyId != null) {
+            feedbackPage = feedbackRepository.findByUserIdAndStoryId(userId, storyId, pageable);
+        } else if (userId != null && typeFilter != null) {
+            feedbackPage = feedbackRepository.findByUserIdAndType(userId, typeFilter, pageable);
+        } else if (userId != null && statusFilter != null) {
+            feedbackPage = feedbackRepository.findByUserIdAndStatus(userId, statusFilter, pageable);
+        } else if (storyId != null && typeFilter != null) {
+            feedbackPage = feedbackRepository.findByStoryIdAndType(storyId, typeFilter, pageable);
+        } else if (storyId != null && statusFilter != null) {
+            feedbackPage = feedbackRepository.findByStoryIdAndStatus(storyId, statusFilter, pageable);
+        } else if (typeFilter != null && statusFilter != null) {
+            feedbackPage = feedbackRepository.findByTypeAndStatus(typeFilter, statusFilter, pageable);
+        } else if (userId != null) {
+            feedbackPage = feedbackRepository.findByUserId(userId, pageable);
+        } else if (storyId != null) {
+            feedbackPage = feedbackRepository.findByStoryId(storyId, pageable);
+        } else if (typeFilter != null) {
+            feedbackPage = feedbackRepository.findByType(typeFilter, pageable);
+        } else if (statusFilter != null) {
+            feedbackPage = feedbackRepository.findByStatus(statusFilter, pageable);
+        } else {
+            // No filters applied, return all feedbacks
+            feedbackPage = feedbackRepository.findAll(pageable);
+        }
+        
+        List<FeedbackResponse> feedbacks = feedbackPage.getContent().stream()
+                .map(this::enrichFeedbackResponse)
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(feedbacks, page, size, feedbackPage.getTotalElements());
+    }
+    
     // Helper method to enrich feedback response with user information
-    private FeedbackResponse enrichFeedbackResponse(Feedback feedback) {
+    public FeedbackResponse enrichFeedbackResponse(Feedback feedback) {
         FeedbackResponse response = FeedbackResponse.fromFeedback(feedback);
         
         // Add username if available

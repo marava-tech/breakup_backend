@@ -36,6 +36,9 @@ public class User {
     @Builder.Default
     private Role role = Role.USER;
     
+    @Builder.Default
+    private Boolean isActive = true;
+    
     @CreatedDate
     private LocalDateTime createdAt;
     

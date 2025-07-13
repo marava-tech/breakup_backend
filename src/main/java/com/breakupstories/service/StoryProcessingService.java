@@ -174,7 +174,7 @@ public class StoryProcessingService {
         }
 
         public static class ProcessingStatusDetailsBuilder {
-            private ProcessingStatusDetails details = new ProcessingStatusDetails();
+            private final ProcessingStatusDetails details = new ProcessingStatusDetails();
 
             public ProcessingStatusDetailsBuilder storyId(String storyId) {
                 details.storyId = storyId;

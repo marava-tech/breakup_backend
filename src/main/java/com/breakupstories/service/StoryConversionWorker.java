@@ -10,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import com.breakupstories.util.TimestampUtil;
 import java.util.ArrayList;
 import java.util.List;
@@ -131,7 +130,7 @@ public class StoryConversionWorker {
     /**
      * Create Story entity from StoryDataStore
      */
-    private Story createStoryFromDataStore(StoryDataStore dataStore, String requestId) {
+    private void createStoryFromDataStore(StoryDataStore dataStore, String requestId) {
         log.info("Creating Story from StoryDataStore for story: {} (Request ID: {})", dataStore.getId(), requestId);
         
         try {
@@ -162,6 +161,17 @@ public class StoryConversionWorker {
                 dataStore.getStepErrors().forEach((step, error) -> 
                     rejectionReasons.append(step).append(" error: ").append(error).append("; "));
             }
+
+            // Determine creation type from metadata
+            Story.CreationType creationType = Story.CreationType.UPLOADED; // Default
+            if (dataStore.getUploadMetadata() != null && dataStore.getUploadMetadata().get("creationType") != null) {
+                String creationTypeStr = dataStore.getUploadMetadata().get("creationType");
+                try {
+                    creationType = Story.CreationType.valueOf(creationTypeStr);
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid creation type in metadata: {}, using default UPLOADED", creationTypeStr);
+                }
+            }
             
             // Create Story entity
             Story story = Story.builder()
@@ -176,14 +186,14 @@ public class StoryConversionWorker {
                     .thumbnailUrl(defaultConfigService.getDefaultThumbnailUrl())
                     .storyImages(defaultConfigService.getDefaultStoryImages())
                     .duration(dataStore.getDuration())
-                    .rejectionReasons(rejectionReasons.length() > 0 ? List.of(rejectionReasons.toString()) : null)
+                    .rejectionReasons(!rejectionReasons.isEmpty() ? List.of(rejectionReasons.toString()) : null)
                     .status(Story.StoryStatus.ACTIVE) // All converted stories are active
+                    .creationType(creationType)
                     .createdAt(dataStore.getCreatedAt())
                     .updatedAt(TimestampUtil.currentLocalDateTime())
                     .build();
             
-            // Save the Story entity
-            Story savedStory = storyRepository.save(story);
+              storyRepository.save(story);
             
             // Check for first story reward
             boolean rewardGiven = firstStoryRewardService.checkAndRewardFirstStory(dataStore.getUserId(), dataStore.getStoryId());
@@ -192,9 +202,7 @@ public class StoryConversionWorker {
             }
             
             log.info("Successfully created Story from StoryDataStore for story: {} (Request ID: {})", dataStore.getId(), requestId);
-            
-            return savedStory;
-            
+
         } catch (Exception e) {
             log.error("Error creating Story from StoryDataStore for story {} (Request ID: {}): {}", dataStore.getId(), requestId, e.getMessage(), e);
             throw new RuntimeException("Failed to create Story from StoryDataStore: " + e.getMessage(), e);

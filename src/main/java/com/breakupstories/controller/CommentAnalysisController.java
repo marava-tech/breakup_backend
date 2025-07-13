@@ -23,7 +23,7 @@ public class CommentAnalysisController {
     private final CommentAnalysisService commentAnalysisService;
     
     @PostMapping("/analyze/{commentId}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Manually analyze a specific comment", description = "Analyze a comment using AI and flag if negative/hateful")
     public ResponseEntity<AbuseDetectionResponse> analyzeComment(@PathVariable String commentId) {
         log.info("Manual comment analysis requested for comment: {}", commentId);
@@ -31,7 +31,7 @@ public class CommentAnalysisController {
     }
     
     @GetMapping("/stats")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get comment analysis statistics", description = "Get statistics about recent comment analysis")
     public ResponseEntity<CommentAnalysisService.CommentAnalysisStats> getAnalysisStats() {
         log.info("Comment analysis statistics requested");

@@ -46,7 +46,13 @@ public class Story {
 
     private String language;
     
+    private CreationType creationType;
+    
     public enum StoryStatus {
         UPLOAD_PENDING, UPLOADING, PROCESSING_PENDING, PROCESSING, PROCESSED, CONVERTING, ACTIVE, INACTIVE, FAILED, REJECTED
+    }
+    
+    public enum CreationType {
+        UPLOADED, WRITTEN
     }
 } 

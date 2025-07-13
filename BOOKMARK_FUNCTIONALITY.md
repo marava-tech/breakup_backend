@@ -38,7 +38,7 @@ public class Bookmark {
 ```java
 public class StoryResponse {
     // ... existing fields ...
-    private boolean isBookmarkedByMe = false;
+    private final boolean isBookmarkedByMe = false;
 }
 ```
 

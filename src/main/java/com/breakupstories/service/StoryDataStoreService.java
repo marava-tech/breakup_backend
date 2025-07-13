@@ -14,10 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.security.core.Authentication;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -70,7 +67,7 @@ public class StoryDataStoreService {
      * Add single error to data store
      */
     public StoryDataStore addErrorToDataStore(String storyId, String error) {
-        return updateDataStoreWithErrors(storyId, Arrays.asList(error));
+        return updateDataStoreWithErrors(storyId, Collections.singletonList(error));
     }
     
     /**
@@ -344,8 +341,8 @@ public class StoryDataStoreService {
         long commentCount = commentService.getCommentCount(story.getId());
         
         // Check if current user liked/bookmarked this story (only if currentUserId is provided)
-        boolean likedByMe = currentUserId != null ? likeService.isLiked(currentUserId, story.getId()) : false;
-        boolean bookmarkedByMe = currentUserId != null ? bookmarkService.isBookmarked(currentUserId, story.getId()) : false;
+        boolean likedByMe = currentUserId != null && likeService.isLiked(currentUserId, story.getId());
+        boolean bookmarkedByMe = currentUserId != null && bookmarkService.isBookmarked(currentUserId, story.getId());
 
         return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
     }

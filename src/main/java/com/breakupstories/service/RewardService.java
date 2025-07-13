@@ -16,11 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +48,7 @@ public class RewardService {
      */
     public CoinBalanceResponse getCoinBalance(String userId) {
         List<CoinHistory> coinHistory = coinHistoryRepository.findByUserId(userId);
+        coinHistory = coinHistory.stream().sorted(Comparator.comparingLong(CoinHistory::getCreatedAt).reversed()).toList();
         int totalCoins = coinHistory.stream()
                 .mapToInt(CoinHistory::getCount)
                 .sum();

@@ -36,6 +36,7 @@ public class StoryResponse {
     private LocalDateTime updatedAt;
     private boolean isLikedByMe ;
     private boolean isBookmarkedByMe ;
+    private Story.CreationType creationType;
 
     public static StoryResponse fromStory(Story story, User user, boolean isLikedByMe, long likeCount, long commentCount) {
         return StoryResponse.builder()
@@ -56,6 +57,7 @@ public class StoryResponse {
                 .rejectionReasons(story.getRejectionReasons())
                 .isLikedByMe(isLikedByMe)
                 .isBookmarkedByMe(false) // Will be set by service layer
+                .creationType(story.getCreationType() != null ? story.getCreationType() : Story.CreationType.UPLOADED)
                 .createdAt(story.getCreatedAt())
                 .updatedAt(story.getUpdatedAt())
                 .build();
@@ -80,6 +82,7 @@ public class StoryResponse {
                 .rejectionReasons(story.getRejectionReasons())
                 .isLikedByMe(isLikedByMe)
                 .isBookmarkedByMe(isBookmarkedByMe)
+                .creationType(story.getCreationType() != null ? story.getCreationType() : Story.CreationType.UPLOADED)
                 .createdAt(story.getCreatedAt())
                 .updatedAt(story.getUpdatedAt())
                 .build();
@@ -100,6 +103,7 @@ public class StoryResponse {
                 .status(story.getStatus())
                 .contents(story.getContents())
                 .rejectionReasons(story.getRejectionReasons())
+                .creationType(story.getCreationType() != null ? story.getCreationType() : Story.CreationType.UPLOADED)
                 .createdAt(story.getCreatedAt())
                 .updatedAt(story.getUpdatedAt())
                 .build();
