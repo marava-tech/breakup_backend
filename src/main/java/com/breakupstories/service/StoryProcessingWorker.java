@@ -120,15 +120,14 @@ public class StoryProcessingWorker {
         log.info("Processing story with AI services for story: {} (Request ID: {})", dataStore.getId(), requestId);
         
         try {
-            String userLanguage = getUserLanguage(user);
             
             // Check if this is a written story
             boolean isWrittenStory = story.getCreationType() == Story.CreationType.WRITTEN;
             
             if (isWrittenStory) {
-                processWrittenStoryWithAI(story, dataStore, user, userLanguage, requestId);
+                processWrittenStoryWithAI(story, dataStore, requestId);
             } else {
-                processAudioStoryWithAI(story, dataStore, user, userLanguage, requestId);
+                processAudioStoryWithAI(dataStore, requestId);
             }
             
         } catch (Exception e) {
@@ -140,9 +139,15 @@ public class StoryProcessingWorker {
     /**
      * Process written story with AI services (different flow: rewrite first, then generate audio)
      */
-    private void processWrittenStoryWithAI(Story story, StoryDataStore dataStore, User user, String userLanguage, String requestId) {
+    private void processWrittenStoryWithAI(Story story, StoryDataStore dataStore, String requestId) {
         log.info("Processing written story with AI services for story: {} (Request ID: {})", dataStore.getId(), requestId);
-        
+
+         String userLanguage;
+         if(ObjectUtils.isNotEmpty(story.getLanguage())){
+             userLanguage = story.getLanguage();
+         }else{
+             userLanguage = dataStore.getLanguage();
+         }
         try {
             // Get story text from metadata
             String storyText = dataStore.getUploadMetadata().get("storyText");
@@ -279,10 +284,14 @@ public class StoryProcessingWorker {
     /**
      * Process audio story with AI services (original flow: transcription first, then rewrite)
      */
-    private void processAudioStoryWithAI(Story story, StoryDataStore dataStore, User user, String userLanguage, String requestId) {
+    private void processAudioStoryWithAI( StoryDataStore dataStore,  String requestId) {
         log.info("Processing audio story with AI services for story: {} (Request ID: {})", dataStore.getId(), requestId);
-        
+
+
+        var userLanguage = dataStore.getLanguage();
+
         // Step 1: Transcription
+
             try {
                 log.info("Starting transcription for story: {} (Request ID: {})", dataStore.getId(), requestId);
                 dataStore.setTranscriptionResponse(retryableAIService.transcribeAudio(dataStore.getAudioUrl(), userLanguage));

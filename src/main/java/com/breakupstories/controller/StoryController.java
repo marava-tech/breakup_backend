@@ -137,7 +137,9 @@ public class StoryController {
             Authentication authentication) {
         
         PagedResponse<StoryResponse> response;
-        if (authentication != null && authentication.isAuthenticated()) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("login required");
+        }
             String email = authentication.getName();
             User user = userService.getUserEntityByEmail(email);
             String userId = user.getId();
@@ -151,14 +153,6 @@ public class StoryController {
             } else {
                 response = storyService.getStories(userId, page, size);
             }
-        } else {
-            // For unauthenticated users, use provided language if available
-            if (language != null && !language.trim().isEmpty()) {
-                response = storyService.getStoriesByLanguage(language, page, size);
-            } else {
-                response = storyService.getStories(page, size);
-            }
-        }
         
         return ResponseEntity.ok(response);
     }
@@ -401,13 +395,33 @@ public class StoryController {
             @RequestParam(defaultValue = "10") int size) {
         
         if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            throw new RuntimeException("login required");
         }
         
         String email = authentication.getName();
-        String userId = userService.getUserEntityByEmail(email).getId();
+        User user = userService.getUserEntityByEmail(email);
+        String userId = user.getId();
         
         PagedResponse<StoryResponse> response = storyService.getLikedStories(userId, page, size);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/my-stories")
+    @Operation(summary = "Get my stories", description = "Get all stories uploaded, written, or recorded by the authenticated user without any filtering")
+    public ResponseEntity<PagedResponse<StoryResponse>> getMyStories(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("login required");
+        }
+        
+        String email = authentication.getName();
+        User user = userService.getUserEntityByEmail(email);
+        String userId = user.getId();
+        
+        PagedResponse<StoryResponse> response = storyService.getStories(userId, page, size);
         return ResponseEntity.ok(response);
     }
     

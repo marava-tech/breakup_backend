@@ -116,6 +116,9 @@ public class StoryUploadWorker {
             // Update data store with audio URL and duration
             dataStore.setAudioUrl(audioUrl);
             dataStore.setDuration(duration);
+
+            //remove the byte array.
+            dataStore.getUploadMetadata().remove("audioFileData");
             storyDataStoreRepository.save(dataStore); // Save the updated data store
             
             // Update status to PROCESSING_PENDING using StoryStatusService

@@ -52,9 +52,7 @@ public class StoryService {
     @Lazy
     private final BookmarkService bookmarkService;
     private final StoryDataStoreService storyDataStoreService;
-    private final ClientInfoService clientInfoService;
     private final DefaultConfigService defaultConfigService;
-    private final AudioGenerationService audioGenerationService;
 
     public StoryResponse createStory(User user, MultipartHttpServletRequest request, Map<String,String> uploadMetadata, String creationType) {
         String requestId = RequestContext.getRequestId();
@@ -877,27 +875,6 @@ public class StoryService {
         rewardService.checkViewsMilestoneReward(storyId);
     }
 
-    /**
-     * Get stories by user's preferred language
-     * @param currentUserId The current user ID
-     * @param page Page number
-     * @param size Page size
-     * @return PagedResponse of stories in the user's preferred language
-     */
-    public PagedResponse<StoryResponse> getStoriesByUserPreferredLanguage(String currentUserId, int page, int size) {
-        // Get user's preferred language
-        User user = userService.getUserEntityById(currentUserId);
-        String preferredLanguage = user.getPreferredStoryLanguage();
-        
-        if (preferredLanguage == null || preferredLanguage.trim().isEmpty()) {
-            // If no preferred language, return all stories
-            return getStories(currentUserId, page, size);
-        }
-        
-        // Get stories by preferred language
-        return getStoriesByLanguage(preferredLanguage, currentUserId, page, size);
-    }
-    
     /**
      * Get latest stories sorted by creation date (newest first)
      * @param currentUserId The current user ID
