@@ -80,5 +80,22 @@
     "value": "due to technical issues we paused withdrawls",
     "description": "Reason for pause withdrawls",
     "active": true
+  },
+  {
+    "key": "app_config_user_story_creation_limit_per_day",
+    "value": "1",
+    "description": "User story creation limit per day",
+    "active": true
+  },
+  {
+    "key": "app_config_max_story_duration_minutes",
+    "value": "25",
+    "description": "Maximum story duration in minutes",
+    "active": true
+  }  ,{
+    "key": "app_config_max_written_story_length_characters",
+    "value": "3000",
+    "description": "Maximum written story length in characters",
+    "active": true
   }
 ]

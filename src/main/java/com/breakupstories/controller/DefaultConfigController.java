@@ -1,10 +1,14 @@
 package com.breakupstories.controller;
 
+import com.breakupstories.dto.AppConfigResponse;
 import com.breakupstories.dto.DefaultConfigRequest;
 import com.breakupstories.dto.DefaultConfigResponse;
 import com.breakupstories.dto.PagedResponse;
+import com.breakupstories.dto.StoryCreationConfigResponse;
+import com.breakupstories.dto.StoryCreationEligibilityResponse;
 import com.breakupstories.service.DefaultConfigService;
 import com.breakupstories.service.UploadService;
+import com.breakupstories.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -14,6 +18,7 @@ import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -29,6 +34,7 @@ import java.util.HashMap;
 public class DefaultConfigController {
     private final DefaultConfigService defaultConfigService;
     private final UploadService uploadService;
+    private final UserService userService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
@@ -105,6 +111,54 @@ public class DefaultConfigController {
     public ResponseEntity<List<String>> getLanguages() {
         return ResponseEntity.ok(defaultConfigService.getLanguages());
     }
+
+    @GetMapping("/by-prefix")
+    @Operation(summary = "Get configuration settings by prefix", 
+               description = "Retrieve all configuration settings with a specific prefix for UI control and restrictions")
+    public ResponseEntity<AppConfigResponse> getConfigurationsByPrefix(
+            @RequestParam String configPrefix) {
+        try {
+            AppConfigResponse response = defaultConfigService.getConfigurationsByPrefix(configPrefix);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error retrieving configurations with prefix '{}': {}", configPrefix, e.getMessage(), e);
+            AppConfigResponse errorResponse = AppConfigResponse.builder()
+                    .configs(Map.of())
+                    .totalConfigs(0)
+                    .message("Failed to retrieve configurations for prefix '" + configPrefix + "': " + e.getMessage())
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+    @GetMapping("/story-creation-config")
+    @Operation(summary = "Get story creation configuration", 
+               description = "Get all story creation configuration settings with parsed values and user eligibility information")
+    public ResponseEntity<StoryCreationConfigResponse> getStoryCreationConfig(
+            Authentication authentication) {
+        try {
+            String userId = null;
+            
+            // Get user ID if authenticated
+            if (authentication != null && authentication.isAuthenticated()) {
+                String email = authentication.getName();
+                userId = userService.getUserEntityByEmail(email).getId();
+            }
+            
+            StoryCreationConfigResponse response = defaultConfigService.getStoryCreationConfig(userId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error retrieving story creation configuration: {}", e.getMessage(), e);
+            StoryCreationConfigResponse errorResponse = StoryCreationConfigResponse.builder()
+                    .configs(Map.of())
+                    .totalConfigs(0)
+                    .message("Error retrieving story creation configuration: " + e.getMessage())
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+
 
     @PostMapping("/upload")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")

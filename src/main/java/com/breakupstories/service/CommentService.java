@@ -179,7 +179,7 @@ public class CommentService {
             throw new RuntimeException("You can only update your own comments");
         }
         
-        // Keep existing abuse detection values
+            // Keep existing abuse detection values
         boolean isAbusive = comment.isAbusive();
         String category = comment.getCategory();
         String explanation = comment.getExplanation();

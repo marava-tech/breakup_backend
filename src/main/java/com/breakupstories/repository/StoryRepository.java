@@ -144,4 +144,12 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     
     // Count stories by user ID
     long countByUserId(String userId);
+    
+    // Count user stories in last 24 hours (excluding FAILED and REJECTED)
+    @Query(value = "{'userId': ?0, 'status': {$nin: ['FAILED', 'REJECTED']}, 'createdAt': {$gte: ?1}}", count = true)
+    long countByUserIdAndStatusNotInAndCreatedAtAfter(String userId, LocalDateTime date);
+    
+    // Find latest non-failed/non-rejected story for user
+    @Query(value = "{'userId': ?0, 'status': {$nin: ['FAILED', 'REJECTED']}}", sort = "{'createdAt': -1}")
+    List<Story> findLatestNonFailedStoryByUserId(String userId);
 } 

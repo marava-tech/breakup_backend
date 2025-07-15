@@ -36,7 +36,7 @@ public class AudioConversionWorker {
     /**
      * Process TTS audio uploads every 7 minutes
      */
-    @Scheduled(fixedRate = 420000) // 7 minutes = 420,000 milliseconds
+    @Scheduled(fixedRate = 60000) // 7 minutes = 420,000 milliseconds
     public void processTTSAudioUploads() {
         String requestId = RequestIdGenerator.generateRequestId();
         log.info("Starting TTS audio conversion worker (Request ID: {})", requestId);

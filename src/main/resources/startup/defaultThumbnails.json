@@ -10,23 +10,5 @@
         "value": "https://res.cloudinary.com/dohsebpd1/image/upload/f_auto,q_auto/v1/breakup/story_mode_image_1_sq1ebx",
         "description": "Default profile image URL for female users",
         "active": true
-      },
-      {
-        "key": "default_story_image_2",
-        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/f_auto,q_auto/v1/breakup/story_mode_image_2_xqzq0y",
-        "description": "Default profile image URL for female users",
-        "active": true
-      },
-      {
-        "key": "default_story_image_3",
-        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/f_auto,q_auto/v1/breakup/story_mode_image_3_xqzq0y",
-        "description": "Default profile image URL for female users",
-        "active": true
-      },
-      {
-        "key": "default_story_image_4",
-        "value": "https://res.cloudinary.com/dohsebpd1/image/upload/f_auto,q_auto/v1/breakup/story_mode_image_4_xqzq0y",
-        "description": "Default profile image URL for female users",
-        "active": true
       }
 ]
