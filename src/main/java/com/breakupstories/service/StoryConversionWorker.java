@@ -139,11 +139,9 @@ public class StoryConversionWorker {
         StoryDataStore.ProcessingStatus currentStatus = dataStore.getProcessingStatus();
         
         if (currentStatus == StoryDataStore.ProcessingStatus.FAILED) {
-            markStoryAsFailed(dataStore, "Story processing failed");
+            createFailedStoryFromDataStore(dataStore, requestId);
         } else if (currentStatus == StoryDataStore.ProcessingStatus.REJECTED) {
-            createRejectedStoryFromDataStore(dataStore, requestId, 
-                "Story rejected: " + (dataStore.getErrors() != null && !dataStore.getErrors().isEmpty() ? 
-                    String.join("\n", dataStore.getErrors()) : "Unknown reason"));
+            createRejectedStoryFromDataStore(dataStore, requestId);
         }
     }
     
@@ -169,6 +167,11 @@ public class StoryConversionWorker {
                 // TTS audio data exists, upload it to Cloudinary
                 String audioUrl = uploadTTSAudioToCloudinary(dataStore, requestId);
                 dataStore.setAudioUrl(audioUrl);
+                
+                // Remove TTS audio data from upload metadata to save storage
+                dataStore.getUploadMetadata().remove("ttsAudioData");
+                log.info("Removed TTS audio data from upload metadata for story: {} (Request ID: {})", dataStore.getId(), requestId);
+                
                 log.info("Successfully uploaded TTS audio for written story: {} - URL: {} (Request ID: {})", 
                         dataStore.getId(), audioUrl, requestId);
             } else {
@@ -294,18 +297,18 @@ public class StoryConversionWorker {
         log.info("Creating/Updating Story from StoryDataStore for story: {} (Request ID: {})", dataStore.getId(), requestId);
         
         try {
-            // Build rejection reasons from all error fields
-            StringBuilder rejectionReasons = new StringBuilder();
+            // Build rejection reasons from errors array only
+            List<String> rejectionReasons = new ArrayList<>();
             
-            // Add general errors
+            // Add errors from StoryDataStore.errors array
             if (dataStore.getErrors() != null && !dataStore.getErrors().isEmpty()) {
-                rejectionReasons.append("General errors: ").append(String.join("\n", dataStore.getErrors()));
+                rejectionReasons.addAll(dataStore.getErrors());
             }
             
-            // Add step errors from map
+            // Add step errors from map if available
             if (dataStore.getStepErrors() != null && !dataStore.getStepErrors().isEmpty()) {
                 dataStore.getStepErrors().forEach((step, error) -> 
-                    rejectionReasons.append(step).append(" error: ").append(error).append("; "));
+                    rejectionReasons.add(step + " error: " + error));
             }
 
             // Determine creation type from metadata
@@ -376,7 +379,7 @@ public class StoryConversionWorker {
      * Update existing story with data from StoryDataStore (overwrite if data exists)
      */
     private Story updateExistingStoryWithDataStore(Story existingStory, StoryDataStore dataStore, 
-                                                   Story.CreationType creationType, StringBuilder rejectionReasons) {
+                                                   Story.CreationType creationType, List<String> rejectionReasons) {
         log.info("Updating existing story with StoryDataStore data: {} (Request ID: {})", dataStore.getStoryId(), dataStore.getId());
         
         // Extract data from StoryDataStore
@@ -424,8 +427,8 @@ public class StoryConversionWorker {
         }
         
         // Update rejection reasons if any
-        if (!rejectionReasons.isEmpty()) {
-            existingStory.setRejectionReasons(List.of(rejectionReasons.toString()));
+        if (rejectionReasons != null && !rejectionReasons.isEmpty()) {
+            existingStory.setRejectionReasons(rejectionReasons);
         }
         
         // Update status to ACTIVE
@@ -615,25 +618,86 @@ public class StoryConversionWorker {
 
 
     /**
-     * Create rejected Story entity from StoryDataStore with custom rejection reason
+     * Create failed Story entity from StoryDataStore
      */
-    private Story createRejectedStoryFromDataStore(StoryDataStore dataStore, String requestId, String rejectionReason) {
+    private void createFailedStoryFromDataStore(StoryDataStore dataStore, String requestId) {
+        log.info("Creating failed Story from StoryDataStore for story: {} (Request ID: {})", dataStore.getId(), requestId);
+        
+        try {
+            // Build rejection reasons from errors array or use default message
+            List<String> rejectionReasons = new ArrayList<>();
+            
+            // If errors array has data → use actual errors
+            if (dataStore.getErrors() != null && !dataStore.getErrors().isEmpty()) {
+                rejectionReasons.addAll(dataStore.getErrors());
+            } else {
+                // Fallback to default message for failed stories
+                rejectionReasons.add("Story processing failed due to technical issues");
+            }
+            
+            // Add step errors from map if available
+            if (dataStore.getStepErrors() != null && !dataStore.getStepErrors().isEmpty()) {
+                dataStore.getStepErrors().forEach((step, error) -> 
+                    rejectionReasons.add(step + " error: " + error));
+            }
+            
+            // Create Story entity with REJECTED status (failed stories are also marked as rejected)
+            Story story = Story.builder()
+                    .id(dataStore.getStoryId())
+                    .userId(dataStore.getUserId())
+                    .title(dataStore.getTitle() != null ? dataStore.getTitle() : "Failed Story")
+                    .contents(extractContentsFromDataStore(dataStore))
+                    .tags(extractTagsFromDataStore(dataStore))
+                    .emotions(extractEmotionsFromDataStore(dataStore))
+                    .language(dataStore.getLanguage())
+                    .audioUrl(dataStore.getAudioUrl())
+                    .thumbnailUrl(extractThumbnailUrl(dataStore))
+                    .storyImages(extractStoryImages(dataStore))
+                    .duration(dataStore.getDuration())
+                    .rejectionReasons(rejectionReasons)
+                    .status(Story.StoryStatus.REJECTED) // Failed stories are marked as rejected
+                    .createdAt(dataStore.getCreatedAt())
+                    .updatedAt(TimestampUtil.currentLocalDateTime())
+                    .build();
+
+            // Save the Story entity
+            Story savedStory = storyRepository.save(story);
+
+            // Set isConversionPending to false for failed stories
+            dataStore.setConversionPending(false);
+            storyDataStoreRepository.save(dataStore);
+            
+            log.info("Successfully created failed Story from StoryDataStore for story: {} (Request ID: {})", dataStore.getId(), requestId);
+
+        } catch (Exception e) {
+            log.error("Error creating failed Story from StoryDataStore for story {} (Request ID: {}): {}", dataStore.getId(), requestId, e.getMessage(), e);
+            throw new RuntimeException("Failed to create failed Story from StoryDataStore: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Create rejected Story entity from StoryDataStore
+     */
+    private void createRejectedStoryFromDataStore(StoryDataStore dataStore, String requestId) {
         log.info("Creating rejected Story from StoryDataStore for story: {} (Request ID: {})", dataStore.getId(), requestId);
         
         try {
-            // Build rejection reasons from all error fields
-            StringBuilder rejectionReasons = new StringBuilder();
+            // Build rejection reasons from errors array or use default message
+            List<String> rejectionReasons = new ArrayList<>();
             
-            // Add the custom rejection reason first
-            rejectionReasons.append(rejectionReason).append("; ");
-            
-            // Add general errors
+            // If errors array has data → use actual errors
             if (dataStore.getErrors() != null && !dataStore.getErrors().isEmpty()) {
-                rejectionReasons.append("General errors: ").append(String.join("\n", dataStore.getErrors())).append("; ");
+                rejectionReasons.addAll(dataStore.getErrors());
+            } else {
+                // Fallback to default message for rejected stories
+                rejectionReasons.add("Story may not be related to love or breakup");
             }
             
-            // Add step-specific errors
-            // (AI-related error fields removed)
+            // Add step errors from map if available
+            if (dataStore.getStepErrors() != null && !dataStore.getStepErrors().isEmpty()) {
+                dataStore.getStepErrors().forEach((step, error) -> 
+                    rejectionReasons.add(error));
+            }
             
             // Create Story entity with REJECTED status
             Story story = Story.builder()
@@ -648,7 +712,7 @@ public class StoryConversionWorker {
                     .thumbnailUrl(extractThumbnailUrl(dataStore))
                     .storyImages(extractStoryImages(dataStore))
                     .duration(dataStore.getDuration())
-                    .rejectionReasons(List.of(rejectionReasons.toString()))
+                    .rejectionReasons(rejectionReasons)
                     .status(Story.StoryStatus.REJECTED) // Invalid stories are rejected
                     .createdAt(dataStore.getCreatedAt())
                     .updatedAt(TimestampUtil.currentLocalDateTime())
@@ -662,9 +726,7 @@ public class StoryConversionWorker {
             storyDataStoreRepository.save(dataStore);
             
             log.info("Successfully created rejected Story from StoryDataStore for story: {} (Request ID: {})", dataStore.getId(), requestId);
-            
-            return savedStory;
-            
+
         } catch (Exception e) {
             log.error("Error creating rejected Story from StoryDataStore for story {} (Request ID: {}): {}", dataStore.getId(), requestId, e.getMessage(), e);
             throw new RuntimeException("Failed to create rejected Story from StoryDataStore: " + e.getMessage(), e);
