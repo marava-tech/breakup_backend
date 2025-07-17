@@ -117,8 +117,15 @@ public class StoryUploadWorker {
             dataStore.setAudioUrl(audioUrl);
             dataStore.setDuration(duration);
 
-            //remove the byte array.
-//            dataStore.getUploadMetadata().remove("audioFileData");
+            // Remove audio file data from upload metadata to save storage
+            if (dataStore.getUploadMetadata() != null) {
+                dataStore.getUploadMetadata().remove("audioFileData");
+                dataStore.getUploadMetadata().remove("audioFileName");
+                dataStore.getUploadMetadata().remove("audioContentType");
+                dataStore.getUploadMetadata().remove("audioFileSize");
+                log.info("Removed audio file data from upload metadata for story: {} (Request ID: {})", dataStore.getId(), requestId);
+            }
+            
             storyDataStoreRepository.save(dataStore); // Save the updated data store
             
             // Update status to PROCESSING_PENDING using StoryStatusService

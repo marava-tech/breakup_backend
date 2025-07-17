@@ -63,6 +63,12 @@ public class AudioConversionWorker {
             // Update story data store with audio URL
             dataStore.setAudioUrl(audioUrl);
             
+            // Remove TTS audio data from upload metadata to save storage
+            if (dataStore.getUploadMetadata() != null) {
+                dataStore.getUploadMetadata().remove("ttsAudioData");
+                log.info("Removed TTS audio data from upload metadata for story: {} (Request ID: {})", dataStore.getId(), requestId);
+            }
+            
             // Mark as COMPLETED for final conversion
             dataStore.setProcessingStatus(StoryDataStore.ProcessingStatus.COMPLETED);
             storyDataStoreRepository.save(dataStore);
