@@ -171,16 +171,18 @@ public class StoryConversionWorker {
                 // Remove TTS audio data from upload metadata to save storage
                 dataStore.getUploadMetadata().remove("ttsAudioData");
                 // Save the updated StoryDataStore to MongoDB to persist the removal
-                storyDataStoreRepository.save(dataStore);
+              
                 log.info("Removed TTS audio data from upload metadata for story: {} (Request ID: {})", dataStore.getId(), requestId);
-                
+                storyDataStoreRepository.save(dataStore);
                 log.info("Successfully uploaded TTS audio for written story: {} - URL: {} (Request ID: {})", 
                         dataStore.getId(), audioUrl, requestId);
+
             } else {
                 // No TTS audio data, use default audio or mark as failed
                 log.warn("No TTS audio data found for written story: {} (Request ID: {})", dataStore.getId(), requestId);
-                dataStore.setAudioUrl(defaultConfigService.getDefaultAudioUrl());
             }
+
+          
             
             // Proceed with story conversion
             createStoryFromDataStore(dataStore, requestId);
