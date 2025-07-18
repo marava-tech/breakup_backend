@@ -170,6 +170,8 @@ public class StoryConversionWorker {
                 
                 // Remove TTS audio data from upload metadata to save storage
                 dataStore.getUploadMetadata().remove("ttsAudioData");
+                // Save the updated StoryDataStore to MongoDB to persist the removal
+                storyDataStoreRepository.save(dataStore);
                 log.info("Removed TTS audio data from upload metadata for story: {} (Request ID: {})", dataStore.getId(), requestId);
                 
                 log.info("Successfully uploaded TTS audio for written story: {} - URL: {} (Request ID: {})", 
