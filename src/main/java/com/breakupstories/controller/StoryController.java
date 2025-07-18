@@ -403,7 +403,7 @@ public class StoryController {
     }
 
     @GetMapping("/my-stories")
-    @Operation(summary = "Get my stories", description = "Get all stories uploaded, written, or recorded by the authenticated user with status from StoryDataStore")
+    @Operation(summary = "Get my stories", description = "Get all stories uploaded, written, or recorded by the authenticated user with status from Story entity only")
     public ResponseEntity<PagedResponse<StoryResponse>> getMyStories(
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
@@ -417,7 +417,7 @@ public class StoryController {
         User user = userService.getUserEntityByEmail(email);
         String userId = user.getId();
         
-        PagedResponse<StoryResponse> response = storyService.getMyStoriesFromDataStore(userId, page, size);
+        PagedResponse<StoryResponse> response = storyService.getMyStories(userId, page, size);
         return ResponseEntity.ok(response);
     }
     

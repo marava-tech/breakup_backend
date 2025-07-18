@@ -637,6 +637,50 @@ public class StoryService {
     }
     
     /**
+     * Get my stories from Story entity only (no StoryDataStore data)
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of stories with status from Story entity only
+     */
+    public PagedResponse<StoryResponse> getMyStories(String currentUserId, int page, int size) {
+        String requestId = RequestContext.getRequestId();
+        log.info("Getting my stories from Story entity for user: {} [RequestID: {}]", currentUserId, requestId);
+        
+        try {
+            // Get all Story entities for the user with pagination
+            Pageable pageable = PageRequest.of(page, size);
+            Page<Story> storyPage = storyRepository.findByUserIdOrderByCreatedAtDesc(currentUserId, pageable);
+            
+            // Convert to StoryResponse objects using only Story entity data
+            List<StoryResponse> stories = storyPage.getContent().stream()
+                    .map(story -> {
+                        try {
+                            User user = userService.getUserEntityById(story.getUserId());
+                            // Create StoryResponse using only Story entity data
+                            return StoryResponse.fromStory(story, user);
+                        } catch (Exception e) {
+                            log.error("Error creating StoryResponse for story {} [RequestID: {}]: {}", 
+                                    story.getId(), requestId, e.getMessage());
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            
+            log.info("Returning {} my stories from Story entity for user {} [RequestID: {}]", 
+                    stories.size(), currentUserId, requestId);
+            
+            return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+            
+        } catch (Exception e) {
+            log.error("Error getting my stories from Story entity for user {} [RequestID: {}]: {}", 
+                    currentUserId, requestId, e.getMessage(), e);
+            throw new RuntimeException("Failed to get my stories: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
      * Get my stories from StoryDataStore collection (fetching status from StoryDataStore instead of Story)
      * @param currentUserId The current user ID
      * @param page Page number
