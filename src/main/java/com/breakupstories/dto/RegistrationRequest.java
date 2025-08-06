@@ -48,4 +48,7 @@ public class RegistrationRequest {
     private Role role;
 
     private String referralCode;
+    
+    // New field for device ID to prevent referral abuse
+    private String deviceId;
 } 

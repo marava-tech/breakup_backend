@@ -27,6 +27,7 @@ public class UserResponse {
     private Integer coinBalance;
     private String referralCode;
     private String referredBy;
+    private String deviceId; // Android device ID for referral tracking
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
@@ -43,6 +44,7 @@ public class UserResponse {
                 .coinBalance(user.getCoinBalance())
                 .referralCode(user.getReferralCode())
                 .referredBy(user.getReferredBy())
+                .deviceId(user.getDeviceId())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

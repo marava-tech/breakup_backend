@@ -95,6 +95,7 @@ public class UserService implements UserDetailsService {
                 .preferredStoryLanguage(request.getPreferredStoryLanguage())
                 .role(role)
                 .coinBalance(0) // Initialize with 0 coins
+                .deviceId(request.getDeviceId()) // Store device ID for referral tracking
                 .build();
         
         User savedUser = userRepository.save(user);
@@ -103,13 +104,18 @@ public class UserService implements UserDetailsService {
         RewardService rewardService = ApplicationContextProvider.getBean(RewardService.class);
         rewardService.generateReferralCode(savedUser.getId());
         
-        // Process referral if referral code is provided
+        // Process referral if referral code is provided (device-based)
         if (request.getReferralCode() != null && !request.getReferralCode().trim().isEmpty()) {
-            rewardService.processReferral(savedUser.getId(), request.getReferralCode().toUpperCase());
+            String deviceId = request.getDeviceId();
+            if (deviceId != null && !deviceId.trim().isEmpty()) {
+                rewardService.processReferral(savedUser.getId(), request.getReferralCode().toUpperCase(), deviceId);
+            } else {
+                log.warn("Referral code provided but no device ID, skipping referral processing for user: {}", savedUser.getId());
+            }
         }
         
-        log.info("Created user with role {} and default profile image: {} -> {}", 
-            role, request.getEmail(), defaultProfileImageUrl);
+        log.info("Created user with role {} and device ID: {} -> {}", 
+            role, request.getDeviceId(), request.getEmail());
         
         return UserResponse.fromUser(savedUser);
     }
