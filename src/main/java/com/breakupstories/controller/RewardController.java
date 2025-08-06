@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/rewards")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Rewards", description = "Reward system APIs")
+@Tag(name = "Rewards", description = "Reward and referral management APIs")
 public class RewardController {
     
     private final RewardService rewardService;

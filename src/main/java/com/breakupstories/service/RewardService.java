@@ -5,11 +5,14 @@ import com.breakupstories.dto.ReferralStatsResponse;
 import com.breakupstories.model.CoinHistory;
 import com.breakupstories.model.Story;
 import com.breakupstories.model.User;
+import com.breakupstories.model.DeviceReferral;
 import com.breakupstories.repository.CoinHistoryRepository;
 import com.breakupstories.repository.StoryRepository;
 import com.breakupstories.repository.UserRepository;
+import com.breakupstories.repository.DeviceReferralRepository;
 import com.breakupstories.repository.FeedbackRepository;
 import com.breakupstories.util.ApplicationContextProvider;
+import com.breakupstories.util.RequestContext;
 import com.breakupstories.dto.RewardConfigResponse;
 import com.breakupstories.model.Feedback;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +20,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +33,7 @@ public class RewardService {
     private final StoryRepository storyRepository;
     private final FeedbackRepository feedbackRepository;
     private final DefaultConfigService defaultConfigService;
+    private final DeviceReferralRepository deviceReferralRepository;
 
     private static final int LIKES_MILESTONE = 100;
     private static final int VIEWS_MILESTONE = 1000;
@@ -93,14 +99,12 @@ public class RewardService {
     /**
      * Deduct coins from user's balance
      */
-    public boolean deductCoins(String userId, int count, String reason) {
+    public void deductCoins(String userId, int count, String reason) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + userId));
         
         if (user.getCoinBalance() < count) {
-            log.warn("Insufficient coins for user {}. Required: {}, Available: {}", 
-                    userId, count, user.getCoinBalance());
-            return false;
+            throw new RuntimeException("Insufficient coin balance");
         }
         
         // Create coin history entry (negative count for deduction)
@@ -117,21 +121,18 @@ public class RewardService {
         userRepository.save(user);
         
         log.info("Deducted {} coins from user {} for reason: {}", count, userId, reason);
-        return true;
     }
     
     /**
-     * Check and reward for story becoming active with duration > 10 minutes
+     * Check and reward for story active milestone (duration > 10 minutes)
      */
     public void checkStoryActiveReward(String storyId) {
         Story story = storyRepository.findById(storyId)
                 .orElseThrow(() -> new RuntimeException("Story not found with ID: " + storyId));
         
-        if (story.getStatus() == Story.StoryStatus.ACTIVE && 
-            story.getDuration() != null &&
-            story.getDuration() > STORY_DURATION_THRESHOLD) {
-            
-            addCoins(story.getUserId(),Integer.parseInt(defaultConfigService.getByKey("default_story_active_points").getValue()) , "10m_plus_story_active", storyId);
+        // Check if story duration is greater than threshold
+        if (story.getDuration() != null && story.getDuration() >= STORY_DURATION_THRESHOLD) {
+            addCoins(story.getUserId(), Integer.parseInt(defaultConfigService.getByKey("default_story_active_points").getValue()), "story_active", storyId);
         }
     }
     
@@ -181,21 +182,61 @@ public class RewardService {
     }
     
     /**
-     * Process referral when a new user signs up
+     * Process referral when a new user signs up (device-based)
      */
-    public void processReferral(String newUserId, String referralCode) {
+    public void processReferral(String newUserId, String referralCode, String deviceId) {
+        String requestId = RequestContext.getRequestId();
+        log.info("Processing device-based referral for user: {}, device: {}, referral code: {} [RequestID: {}]", 
+                newUserId, deviceId, referralCode, requestId);
+        
+        // Validate device ID
+        if (deviceId == null || deviceId.trim().isEmpty()) {
+            log.warn("Device ID is required for referral processing [RequestID: {}]", requestId);
+            return;
+        }
+        
+        // Check if this device has already used a referral code
+        if (deviceReferralRepository.existsByDeviceId(deviceId)) {
+            log.info("Device {} has already used a referral code, skipping referral processing [RequestID: {}]", 
+                    deviceId, requestId);
+            return;
+        }
+        
+        // Find the referrer by referral code
         Optional<User> referrer = userRepository.findByReferralCode(referralCode);
         
         if (referrer.isPresent()) {
             User newUser = userRepository.findById(newUserId)
                     .orElseThrow(() -> new RuntimeException("User not found: " + newUserId));
             
+            // Check if referrer has reached maximum referrals limit
+            long referrerReferralCount = deviceReferralRepository.countByReferrerUserId(referrer.get().getId());
+            int maxReferralsPerUser = Integer.parseInt(defaultConfigService.getByKey("max_referrals_per_user").getValue());
+            
+            if (referrerReferralCount >= maxReferralsPerUser) {
+                log.warn("Referrer {} has reached maximum referrals limit ({}), skipping referral [RequestID: {}]", 
+                        referrer.get().getId(), maxReferralsPerUser, requestId);
+                return;
+            }
+            
+            // Create device referral record
+            DeviceReferral deviceReferral = DeviceReferral.builder()
+                    .deviceId(deviceId)
+                    .referralCode(referralCode)
+                    .referrerUserId(referrer.get().getId())
+                    .referredUserId(newUserId)
+                    .rewardClaimed(false)
+                    .build();
+            
+            DeviceReferral savedDeviceReferral = deviceReferralRepository.save(deviceReferral);
+            log.info("Created device referral record: {} [RequestID: {}]", savedDeviceReferral.getId(), requestId);
+            
             // Update new user's referred by field
             newUser.setReferredBy(referrer.get().getId());
             userRepository.save(newUser);
 
-           int referralRewardPoints =  Integer.parseInt(defaultConfigService.getByKey("default_referral_reward_points").getValue());
-            int referralWelcomePoints =  Integer.parseInt(defaultConfigService.getByKey("default_referral_welcome_points").getValue());
+            int referralRewardPoints = Integer.parseInt(defaultConfigService.getByKey("default_referral_reward_points").getValue());
+            int referralWelcomePoints = Integer.parseInt(defaultConfigService.getByKey("default_referral_welcome_points").getValue());
 
             // Reward the referrer
             addCoins(referrer.get().getId(), referralRewardPoints, "referral_reward_"+newUser.getName(), newUserId);
@@ -203,25 +244,55 @@ public class RewardService {
             // Reward the referred user
             addCoins(newUserId, referralWelcomePoints, "referral_welcome", referrer.get().getId());
             
-            log.info("Processed referral: {} referred {} (referrer: {} coins, referred: {} coins)", 
-                    referrer.get().getId(), newUserId, referralRewardPoints, referralWelcomePoints);
+            // Mark reward as claimed
+            savedDeviceReferral.setRewardClaimed(true);
+            savedDeviceReferral.setRewardClaimedAt(LocalDateTime.now());
+            deviceReferralRepository.save(savedDeviceReferral);
+            
+            log.info("Processed device-based referral: {} referred {} (referrer: {} coins, referred: {} coins) [RequestID: {}]", 
+                    referrer.get().getId(), newUserId, referralRewardPoints, referralWelcomePoints, requestId);
         } else {
-            log.warn("Invalid referral code: {}", referralCode);
+            log.warn("Invalid referral code: {} [RequestID: {}]", referralCode, requestId);
         }
     }
     
     /**
-     * Get referral statistics for a user
+     * Process referral when a new user signs up (backward compatibility)
+     */
+    public void processReferral(String newUserId, String referralCode) {
+        // For backward compatibility, process without device ID
+        processReferral(newUserId, referralCode, null);
+    }
+    
+    /**
+     * Get referral statistics for a user (updated to include device-based referrals)
      */
     public ReferralStatsResponse getReferralStats(String userId) {
-        List<User> referredUsers = userRepository.findByReferredBy(userId);
+        List<DeviceReferral> deviceReferrals = deviceReferralRepository.findByReferrerUserId(userId);
+        List<String> referredUserIds = deviceReferrals.stream()
+                .map(DeviceReferral::getReferredUserId)
+                .collect(Collectors.toList());
         
         return ReferralStatsResponse.builder()
                 .referralCode(userRepository.findById(userId).map(User::getReferralCode).orElse(null))
                 .referredBy(userRepository.findById(userId).map(User::getReferredBy).orElse(null))
-                .referredUsersCount(referredUsers.size())
-                .referredUsers(referredUsers.stream().map(User::getId).toList())
+                .referredUsersCount(deviceReferrals.size())
+                .referredUsers(referredUserIds)
                 .build();
+    }
+    
+    /**
+     * Check if a device has already used a referral code
+     */
+    public boolean hasDeviceUsedReferral(String deviceId) {
+        return deviceReferralRepository.existsByDeviceId(deviceId);
+    }
+    
+    /**
+     * Get device referral information
+     */
+    public Optional<DeviceReferral> getDeviceReferral(String deviceId) {
+        return deviceReferralRepository.findByDeviceId(deviceId);
     }
     
     /**
@@ -301,5 +372,4 @@ public class RewardService {
         
         return RewardConfigResponse.fromConfigMaps(rewardConfigs, referralConfigs);
     }
-    
-} 
+}

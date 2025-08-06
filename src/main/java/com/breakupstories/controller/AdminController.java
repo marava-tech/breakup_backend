@@ -525,6 +525,29 @@ public class AdminController {
         }
     }
     
+    @GetMapping("/users/device/{deviceId}")
+    @Operation(summary = "Get users by device ID", description = "Get all users associated with a specific device ID")
+    public ResponseEntity<Map<String, Object>> getUsersByDeviceId(@PathVariable String deviceId) {
+        try {
+            List<User> users = userRepository.findAllByDeviceId(deviceId);
+            List<UserResponse> userResponses = users.stream()
+                    .map(UserResponse::fromUser)
+                    .collect(java.util.stream.Collectors.toList());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("deviceId", deviceId);
+            response.put("userCount", users.size());
+            response.put("users", userResponses);
+            
+            log.info("Retrieved {} users for device ID: {}", users.size(), deviceId);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error fetching users by device ID {}: {}", deviceId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
     // ==================== COMMENT MANAGEMENT ====================
     
     @GetMapping("/comments")

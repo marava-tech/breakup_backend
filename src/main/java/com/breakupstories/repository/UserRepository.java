@@ -35,6 +35,21 @@ public interface UserRepository extends MongoRepository<User, String> {
      */
     List<User> findByReferredBy(String referredBy);
     
+    /**
+     * Find user by device ID
+     */
+    Optional<User> findByDeviceId(String deviceId);
+    
+    /**
+     * Check if device ID exists
+     */
+    boolean existsByDeviceId(String deviceId);
+    
+    /**
+     * Find all users by device ID
+     */
+    List<User> findAllByDeviceId(String deviceId);
+    
     // Count methods for admin statistics
     long countByRole(Role role);
     

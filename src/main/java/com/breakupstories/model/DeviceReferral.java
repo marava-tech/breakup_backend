@@ -1,7 +1,5 @@
 package com.breakupstories.model;
 
-import com.breakupstories.enums.GENDER;
-import com.breakupstories.enums.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,28 +15,18 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "users")
-public class User {
+@Document(collection = "device_referrals")
+public class DeviceReferral {
     
     @Id
     private String id;
     
-    private String name;
-    private String email;
-    private GENDER gender;
-    private Integer age;
-    private String profileImageUrl;
-    private String preferredStoryLanguage;
-    private String referralCode;
-    private String referredBy;
-    private int coinBalance;
-    private String deviceId; // Android device ID for referral tracking
-    
-    @Builder.Default
-    private Role role = Role.USER;
-    
-    @Builder.Default
-    private Boolean isActive = true;
+    private String deviceId;           // Android device ID
+    private String referralCode;       // Referral code used
+    private String referrerUserId;     // User who provided the referral code
+    private String referredUserId;     // User who used the referral code
+    private boolean rewardClaimed;     // Whether the referral reward has been claimed
+    private LocalDateTime rewardClaimedAt; // When the reward was claimed
     
     @CreatedDate
     private LocalDateTime createdAt;
