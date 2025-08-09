@@ -208,19 +208,30 @@ public class RewardService {
             return;
         }
         
-        // Check if this device has already used a referral code by checking existing users
-        if (userRepository.existsByDeviceId(deviceId)) {
-            log.info("Device {} has already used a referral code, skipping referral processing [RequestID: {}]", 
-                    deviceId, requestId);
+        // Get the current user to check their email
+        User newUser = userRepository.findById(newUserId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + newUserId));
+        
+        // Check if this exact device-email combination has already processed a referral
+        // This prevents the same user from claiming referral rewards multiple times
+        if (userRepository.existsByDeviceId(deviceId) && newUser.getReferredBy() != null) {
+            log.info("Device {} with email {} has already used a referral code, skipping referral processing [RequestID: {}]", 
+                    deviceId, newUser.getEmail(), requestId);
             return;
+        }
+        
+        // Check if this device has already been used by a different email address
+        // We'll still process the referral relationship but give 0 coins
+        boolean deviceUsedByDifferentEmail = userRepository.existsByDeviceIdAndEmailNot(deviceId, newUser.getEmail());
+        if (deviceUsedByDifferentEmail) {
+            log.info("Device {} has already been used by a different email address, will map referredBy but give 0 coins [RequestID: {}]", 
+                    deviceId, requestId);
         }
         
         // Find the referrer by referral code
         Optional<User> referrer = userRepository.findByReferralCode(referralCode);
         
         if (referrer.isPresent()) {
-            User newUser = userRepository.findById(newUserId)
-                    .orElseThrow(() -> new RuntimeException("User not found: " + newUserId));
             
             // Check if referrer has reached maximum referrals limit by counting referred users
             long referrerReferralCount = userRepository.findByReferredBy(referrer.get().getId()).size();
@@ -239,13 +250,28 @@ public class RewardService {
             log.info("Updated user {} with referrer {} and device ID {} [RequestID: {}]", 
                     newUserId, referrer.get().getId(), deviceId, requestId);
 
-            int referralRewardPoints = Integer.parseInt(defaultConfigService.getByKey("default_referral_reward_points").getValue());
-            int referralWelcomePoints = Integer.parseInt(defaultConfigService.getByKey("default_referral_welcome_points").getValue());
+            // Determine coin amounts based on whether device was used by different email
+            int referralRewardPoints;
+            int referralWelcomePoints;
+            
+            if (!deviceUsedByDifferentEmail) {
+                // Normal referral - give full coins
+                referralRewardPoints = Integer.parseInt(defaultConfigService.getByKey("default_referral_reward_points").getValue());
+                referralWelcomePoints = Integer.parseInt(defaultConfigService.getByKey("default_referral_welcome_points").getValue());
+                
+                log.info("Processing normal referral with full coin rewards [RequestID: {}]", requestId);
+            } else {
+                // Device used by different email - give 0 coins but still map relationship
+                referralRewardPoints = 0;
+                referralWelcomePoints = 0;
+                
+                log.info("Processing referral with 0 coins due to device being used by different email [RequestID: {}]", requestId);
+            }
 
-            // Reward the referrer
+            // Reward the referrer (0 if device used by different email)
             addCoins(referrer.get().getId(), referralRewardPoints, "referral_reward_"+newUser.getName(), newUserId, CoinHistoryEntityType.USER);
             
-            // Reward the referred user
+            // Reward the referred user (0 if device used by different email)
             addCoins(newUserId, referralWelcomePoints, "referral_welcome", referrer.get().getId(), CoinHistoryEntityType.USER);
             
             log.info("Processed device-based referral: {} referred {} (referrer: {} coins, referred: {} coins) [RequestID: {}]", 
@@ -278,6 +304,13 @@ public class RewardService {
      */
     public boolean hasDeviceUsedReferral(String deviceId) {
         return userRepository.existsByDeviceId(deviceId);
+    }
+    
+    /**
+     * Check if a device has already used a referral code with a different email
+     */
+    public boolean hasDeviceUsedReferralWithDifferentEmail(String deviceId, String email) {
+        return userRepository.existsByDeviceIdAndEmailNot(deviceId, email);
     }
     
     /**

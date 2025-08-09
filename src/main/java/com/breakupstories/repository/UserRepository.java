@@ -50,6 +50,11 @@ public interface UserRepository extends MongoRepository<User, String> {
      */
     List<User> findAllByDeviceId(String deviceId);
     
+    /**
+     * Check if device ID exists with a different email
+     */
+    boolean existsByDeviceIdAndEmailNot(String deviceId, String email);
+    
     // Count methods for admin statistics
     long countByRole(Role role);
     

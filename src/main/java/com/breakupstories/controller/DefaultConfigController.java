@@ -3,6 +3,7 @@ package com.breakupstories.controller;
 import com.breakupstories.dto.AppConfigResponse;
 import com.breakupstories.dto.DefaultConfigRequest;
 import com.breakupstories.dto.DefaultConfigResponse;
+import com.breakupstories.dto.DeviceConfigResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.StoryCreationConfigResponse;
 import com.breakupstories.dto.UserConfigResponse;
@@ -291,6 +292,28 @@ public class DefaultConfigController {
             response.put("message", "Failed to verify startup data");
             
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/device-configs")
+    @Operation(summary = "Get device-specific configurations (Public API)", 
+               description = "Get device-specific configuration settings (device_config_* only) including ban status and referral eligibility. No authentication required.")
+    public ResponseEntity<DeviceConfigResponse> getDeviceConfigs(@RequestParam String deviceId) {
+        try {
+            if (deviceId == null || deviceId.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(DeviceConfigResponse.error("Device ID is required", deviceId));
+            }
+            
+            DeviceConfigResponse response = defaultConfigService.getDeviceConfigs(deviceId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error retrieving device configurations for device {}: {}", deviceId, e.getMessage(), e);
+            DeviceConfigResponse errorResponse = DeviceConfigResponse.error(
+                    "Error retrieving device configurations: " + e.getMessage(), 
+                    deviceId
+            );
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
 } 

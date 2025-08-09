@@ -3,6 +3,7 @@ package com.breakupstories.service;
 import com.breakupstories.dto.AppConfigResponse;
 import com.breakupstories.dto.DefaultConfigRequest;
 import com.breakupstories.dto.DefaultConfigResponse;
+import com.breakupstories.dto.DeviceConfigResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.QuoteResponse;
 import com.breakupstories.dto.StoryCreationConfigResponse;
@@ -11,6 +12,7 @@ import com.breakupstories.model.DefaultConfig;
 import com.breakupstories.model.Withdrawal;
 import com.breakupstories.repository.DefaultConfigRepository;
 import com.breakupstories.repository.StoryRepository;
+import com.breakupstories.repository.UserRepository;
 import com.breakupstories.repository.WithdrawalRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -33,6 +35,8 @@ public class DefaultConfigService {
     private final DefaultConfigRepository defaultConfigRepository;
     private final StoryRepository storyRepository;
     private final WithdrawalRepository withdrawalRepository;
+    private final UserRepository userRepository;
+    private final BannedDeviceService bannedDeviceService;
     private static final Logger log = LoggerFactory.getLogger(DefaultConfigService.class);
 
     public DefaultConfigResponse create(DefaultConfigRequest request) {
@@ -766,6 +770,69 @@ public class DefaultConfigService {
                     .totalConfigs(0)
                     .message("Failed to retrieve user configuration")
                     .build();
+        }
+    }
+    
+    /**
+     * Get device-specific configurations including ban status and referral eligibility
+     * Returns only device_config_* configurations (no app-level configs)
+     * @param deviceId The device ID to get configuration for
+     * @return DeviceConfigResponse with device-specific information
+     */
+    public DeviceConfigResponse getDeviceConfigs(String deviceId) {
+        try {
+            log.info("Getting device configuration for device: {}", deviceId);
+            
+            // Get only device-specific configurations
+            Map<String, Object> configMap = new HashMap<>();
+            
+            // Add device-specific configs if any exist
+            List<DefaultConfig> deviceConfigs = defaultConfigRepository.findByKeyStartingWithAndActiveTrue("device_config_");
+            for (DefaultConfig config : deviceConfigs) {
+                String keyWithoutPrefix = config.getKey().replace("device_config_", "");
+                configMap.put(keyWithoutPrefix, config.getValue());
+            }
+            
+            // Check if device is banned
+            boolean isBanned = false;
+            String banReason = null;
+            java.time.LocalDateTime bannedAt = null;
+            java.util.List<String> bannedEmails = null;
+            
+            if (deviceId != null && !deviceId.trim().isEmpty()) {
+                com.breakupstories.dto.BannedDeviceResponse bannedDeviceResponse = bannedDeviceService.getBannedDevice(deviceId);
+                if (bannedDeviceResponse != null) {
+                    isBanned = true;
+                    banReason = bannedDeviceResponse.getReason();
+                    bannedAt = bannedDeviceResponse.getCreatedAt();
+                    bannedEmails = bannedDeviceResponse.getEmails();
+                }
+            }
+            
+            // Check referral eligibility using the same logic as RewardService
+            boolean isEligibleForReferral = false;
+            if (deviceId != null && !deviceId.trim().isEmpty()) {
+                // Device is eligible if it hasn't been used for referral yet
+                // This uses the same logic as RewardService.hasDeviceUsedReferral()
+                isEligibleForReferral = !userRepository.existsByDeviceId(deviceId);
+            }
+            
+            log.info("Device {} config: banned={}, eligible_for_referral={}", 
+                    deviceId, isBanned, isEligibleForReferral);
+            
+            return DeviceConfigResponse.success(
+                    configMap, 
+                    deviceId, 
+                    isBanned, 
+                    banReason, 
+                    bannedAt, 
+                    bannedEmails,
+                    isEligibleForReferral
+            );
+            
+        } catch (Exception e) {
+            log.error("Failed to get device configuration for device {}: {}", deviceId, e.getMessage(), e);
+            return DeviceConfigResponse.error("Failed to retrieve device configuration", deviceId);
         }
     }
 } 
