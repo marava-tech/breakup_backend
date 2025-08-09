@@ -2,6 +2,7 @@ package com.breakupstories.controller;
 
 import com.breakupstories.dto.*;
 import com.breakupstories.exception.InvalidOTPException;
+import com.breakupstories.service.BannedDeviceService;
 import com.breakupstories.service.JwtService;
 import com.breakupstories.service.OTPService;
 import com.breakupstories.service.UserService;

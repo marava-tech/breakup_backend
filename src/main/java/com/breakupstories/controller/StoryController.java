@@ -208,6 +208,13 @@ public class StoryController {
                         response = storyService.getLatestStories(userId, page, size);
                     }
                 }
+                case VOICE -> {
+                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                        response = storyService.getVoiceStoriesByLanguage(filterLanguage, userId, page, size);
+                    } else {
+                        response = storyService.getVoiceStories(userId, page, size);
+                    }
+                }
                 case LANGUAGE -> {
                     if (language != null && !language.trim().isEmpty()) {
                         response = storyService.getStoriesByLanguage(language, userId, page, size);
@@ -245,6 +252,13 @@ public class StoryController {
                         response = storyService.getLatestStoriesByLanguage(language, page, size);
                     } else {
                         response = storyService.getLatestStories(page, size);
+                    }
+                }
+                case VOICE -> {
+                    if (language != null && !language.trim().isEmpty()) {
+                        response = storyService.getVoiceStoriesByLanguage(language, page, size);
+                    } else {
+                        response = storyService.getVoiceStories(page, size);
                     }
                 }
                 case LANGUAGE -> {

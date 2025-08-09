@@ -323,7 +323,7 @@ public class AdminController {
     // ==================== USER MANAGEMENT ====================
     
     @GetMapping("/users")
-    @Operation(summary = "Get users with filters", description = "Retrieve paginated list of users with optional filters including device ID")
+    @Operation(summary = "Get users with filters", description = "Retrieve paginated list of users with optional filters including device ID and referredBy")
     public ResponseEntity<PagedResponse<UserResponse>> getUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -333,6 +333,7 @@ public class AdminController {
             @RequestParam(required = false) String gender,
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String deviceId,
+            @RequestParam(required = false) String referredBy,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortOrder) {
         try {
@@ -360,8 +361,8 @@ public class AdminController {
                 }
             }
             
-            // Use the custom filtering method that supports device ID
-            Page<User> userPage = filterUsers(username, email, roleFilter, genderFilter, userId, deviceId, pageable);
+            // Use the custom filtering method that supports device ID and referredBy
+            Page<User> userPage = filterUsers(username, email, roleFilter, genderFilter, userId, deviceId, referredBy, pageable);
             
             List<UserResponse> users = userPage.getContent().stream()
                     .map(user -> UserResponse.fromUserWithReferrerName(user, userRepository))
@@ -444,16 +445,23 @@ public class AdminController {
     }
     
     /**
-     * Custom filtering method that supports all filter combinations including device ID
+     * Custom filtering method that supports all filter combinations including device ID and referredBy
      */
     private Page<User> filterUsers(String username, String email, Role roleFilter, GENDER genderFilter, 
-                                   String userId, String deviceId, Pageable pageable) {
+                                   String userId, String deviceId, String referredBy, Pageable pageable) {
         
         // If only deviceId is provided, use the repository method
         if (deviceId != null && username == null && email == null && roleFilter == null && 
-            genderFilter == null && userId == null) {
+            genderFilter == null && userId == null && referredBy == null) {
             List<User> deviceUsers = userRepository.findAllByDeviceId(deviceId);
             return createPageFromList(deviceUsers, pageable);
+        }
+        
+        // If only referredBy is provided, use the repository method
+        if (referredBy != null && username == null && email == null && roleFilter == null && 
+            genderFilter == null && userId == null && deviceId == null) {
+            List<User> referredUsers = userRepository.findByReferredBy(referredBy);
+            return createPageFromList(referredUsers, pageable);
         }
         
         // For complex filtering with device ID, we need to use a custom approach
@@ -471,7 +479,7 @@ public class AdminController {
             User user = userOpt.get();
             
             // Check if the user matches all other filters
-            if (matchesFilters(user, username, email, roleFilter, genderFilter, deviceId)) {
+            if (matchesFilters(user, username, email, roleFilter, genderFilter, deviceId, referredBy)) {
                 return createPageFromList(List.of(user), pageable);
             } else {
                 return Page.empty(pageable);
@@ -482,7 +490,16 @@ public class AdminController {
         if (deviceId != null) {
             List<User> deviceUsers = userRepository.findAllByDeviceId(deviceId);
             List<User> filteredUsers = deviceUsers.stream()
-                    .filter(user -> matchesFilters(user, username, email, roleFilter, genderFilter, null))
+                    .filter(user -> matchesFilters(user, username, email, roleFilter, genderFilter, null, referredBy))
+                    .collect(java.util.stream.Collectors.toList());
+            return createPageFromList(filteredUsers, pageable);
+        }
+        
+        // If no userId but referredBy is specified, start with referred users
+        if (referredBy != null) {
+            List<User> referredUsers = userRepository.findByReferredBy(referredBy);
+            List<User> filteredUsers = referredUsers.stream()
+                    .filter(user -> matchesFilters(user, username, email, roleFilter, genderFilter, deviceId, null))
                     .collect(java.util.stream.Collectors.toList());
             return createPageFromList(filteredUsers, pageable);
         }
@@ -521,7 +538,7 @@ public class AdminController {
      * Check if a user matches the given filters
      */
     private boolean matchesFilters(User user, String username, String email, Role roleFilter, 
-                                   GENDER genderFilter, String deviceId) {
+                                   GENDER genderFilter, String deviceId, String referredBy) {
         if (username != null && (user.getName() == null || 
                 !user.getName().toLowerCase().contains(username.toLowerCase()))) {
             return false;
@@ -541,6 +558,10 @@ public class AdminController {
         }
         
         if (deviceId != null && !deviceId.equals(user.getDeviceId())) {
+            return false;
+        }
+        
+        if (referredBy != null && !referredBy.equals(user.getReferredBy())) {
             return false;
         }
         

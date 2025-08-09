@@ -1120,6 +1120,106 @@ public class StoryService {
     }
     
     /**
+     * Get voice stories (stories with UPLOADED creation type) sorted by creation date (newest first) - for authenticated users
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of voice stories with user context
+     */
+    public PagedResponse<StoryResponse> getVoiceStories(String currentUserId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusOrderByCreatedAtDesc(
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get voice stories (stories with UPLOADED creation type) sorted by creation date (newest first) - for unauthenticated users
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of voice stories
+     */
+    public PagedResponse<StoryResponse> getVoiceStories(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusOrderByCreatedAtDesc(
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get voice stories by language (stories with UPLOADED creation type) sorted by creation date (newest first) - for unauthenticated users
+     * @param language The language to filter by
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of voice stories in the specified language
+     */
+    public PagedResponse<StoryResponse> getVoiceStoriesByLanguage(String language, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusAndLanguageOrderByCreatedAtDesc(
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, language, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get voice stories by language (stories with UPLOADED creation type) sorted by creation date (newest first) - for authenticated users
+     * @param language The language to filter by
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of voice stories in the specified language with user context
+     */
+    public PagedResponse<StoryResponse> getVoiceStoriesByLanguage(String language, String currentUserId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusAndLanguageOrderByCreatedAtDesc(
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, language, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
      * Search stories by title contains (case-insensitive)
      * @param titleContains Text to search in story titles
      * @param currentUserId The current user ID
