@@ -1,12 +1,17 @@
 package com.breakupstories.controller;
 
+import com.breakupstories.dto.AddCoinHistoryRequest;
+import com.breakupstories.dto.AddCoinHistoryResponse;
 import com.breakupstories.dto.CoinBalanceResponse;
+import com.breakupstories.dto.CoinHistoryInvalidationRequest;
 import com.breakupstories.dto.ReferralStatsResponse;
 import com.breakupstories.dto.RewardConfigResponse;
+import com.breakupstories.model.CoinHistory;
 import com.breakupstories.service.RewardService;
 import com.breakupstories.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -17,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/rewards")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Rewards", description = "Reward system APIs")
+@Tag(name = "Rewards", description = "Reward and referral management APIs")
 public class RewardController {
     
     private final RewardService rewardService;
@@ -72,5 +77,59 @@ public class RewardController {
         RewardConfigResponse response = rewardService.getRewardConfigurations();
         
         return ResponseEntity.ok(response);
+    }
+    
+    @PutMapping("/coin-history/invalidate")
+    @Operation(summary = "Invalidate coin history", description = "Invalidate a coin history entry with reason and refund option (Admin only)")
+    public ResponseEntity<String> invalidateCoinHistory(@Valid @RequestBody CoinHistoryInvalidationRequest request) {
+        log.info("Invalidating coin history {} with reason: {} (refund: {})", 
+                request.getCoinHistoryId(), request.getInvalidationReason(), request.getRefund());
+        
+        try {
+            rewardService.invalidateCoinHistory(
+                request.getCoinHistoryId(), 
+                request.getInvalidationReason(), 
+                request.getRefund()
+            );
+            
+            return ResponseEntity.ok("Coin history invalidated successfully");
+        } catch (Exception e) {
+            log.error("Error invalidating coin history: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+        }
+    }
+    
+    @PostMapping("/coin-history")
+    @Operation(summary = "Add coin history", description = "Manually add a coin history entry (Admin only)")
+    public ResponseEntity<AddCoinHistoryResponse> addCoinHistory(@Valid @RequestBody AddCoinHistoryRequest request) {
+        log.info("Adding coin history: {} coins for user {} with reason: {}", 
+                request.getCount(), request.getUserId(), request.getReason());
+        
+        try {
+            CoinHistory coinHistory = rewardService.addCoinHistoryManually(
+                request.getUserId(),
+                request.getCount(),
+                request.getReason(),
+                request.getRelatedEntityId(),
+                request.getRelatedEntityType(),
+                request.getInvalidate(),
+                request.getInvalidationReason(),
+                request.getRefund()
+            );
+            
+            // Get updated user balance
+            int newUserBalance = rewardService.getValidTotalCoins(request.getUserId());
+            
+            AddCoinHistoryResponse response = AddCoinHistoryResponse.fromCoinHistory(coinHistory, newUserBalance);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error adding coin history: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(
+                AddCoinHistoryResponse.builder()
+                    .message("Error: " + e.getMessage())
+                    .build()
+            );
+        }
     }
 } 

@@ -2,6 +2,7 @@ package com.breakupstories.controller;
 
 import com.breakupstories.dto.WithdrawalRequest;
 import com.breakupstories.dto.WithdrawalResponse;
+import com.breakupstories.dto.WithdrawalStatusUpdateRequest;
 import com.breakupstories.model.Withdrawal;
 import com.breakupstories.service.UserService;
 import com.breakupstories.service.WithdrawalService;
@@ -21,7 +22,7 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.breakupstories.dto.WithdrawalOptionResponse;
+
 import com.breakupstories.dto.WithdrawalOptionsResponse;
 
 @RestController
@@ -75,6 +76,9 @@ public class WithdrawalController {
             
             Withdrawal.WithdrawalStatus status = Withdrawal.WithdrawalStatus.valueOf(statusParam.toUpperCase());
             
+            // Extract comments from form data
+            String comments = request.getParameter("comments");
+            
             // Handle file upload
             String proofImageUrl = null;
             MultipartFile file = request.getFile("file");
@@ -82,7 +86,7 @@ public class WithdrawalController {
                 proofImageUrl = uploadService.uploadSingleFile(file);
             }
             
-            WithdrawalResponse response = withdrawalService.updateWithdrawalStatus(withdrawalId, status, proofImageUrl);
+            WithdrawalResponse response = withdrawalService.updateWithdrawalStatus(withdrawalId, status, proofImageUrl, comments);
             return ResponseEntity.ok(Map.of("success", true, "data", response));
             
         } catch (IllegalArgumentException e) {
@@ -97,6 +101,26 @@ public class WithdrawalController {
             errorResponse.put("error", e.getMessage());
             errorResponse.put("message", "Failed to update withdrawal status");
             return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
+    
+    @PutMapping("/{withdrawalId}/status-json")
+    @Operation(summary = "Update withdrawal status with JSON (Admin)", description = "Update withdrawal status with comments using JSON request body")
+    public ResponseEntity<WithdrawalResponse> updateWithdrawalStatusJson(
+            @PathVariable String withdrawalId,
+            @Valid @RequestBody WithdrawalStatusUpdateRequest request) {
+        
+        try {
+            WithdrawalResponse response = withdrawalService.updateWithdrawalStatus(
+                withdrawalId, 
+                request.getStatus(), 
+                null, // No proof image URL in JSON request
+                request.getComments()
+            );
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
         }
     }
     

@@ -32,8 +32,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +46,7 @@ public class UserService implements UserDetailsService {
     private final LikeRepository likeRepository;
     private final CommentRepository commentRepository;
     private final CoinHistoryRepository coinHistoryRepository;
+    private final RewardService rewardService;
     
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
@@ -94,7 +93,7 @@ public class UserService implements UserDetailsService {
                 .profileImageUrl(defaultProfileImageUrl)
                 .preferredStoryLanguage(request.getPreferredStoryLanguage())
                 .role(role)
-                .coinBalance(0) // Initialize with 0 coins
+                .deviceId(request.getDeviceId()) // Store device ID for referral tracking
                 .build();
         
         User savedUser = userRepository.save(user);
@@ -103,13 +102,18 @@ public class UserService implements UserDetailsService {
         RewardService rewardService = ApplicationContextProvider.getBean(RewardService.class);
         rewardService.generateReferralCode(savedUser.getId());
         
-        // Process referral if referral code is provided
+        // Process referral if referral code is provided (device-based)
         if (request.getReferralCode() != null && !request.getReferralCode().trim().isEmpty()) {
-            rewardService.processReferral(savedUser.getId(), request.getReferralCode().toUpperCase());
+            String deviceId = request.getDeviceId();
+            if (deviceId != null && !deviceId.trim().isEmpty()) {
+                rewardService.processReferral(savedUser.getId(), request.getReferralCode().toUpperCase(), deviceId);
+            } else {
+                log.warn("Referral code provided but no device ID, skipping referral processing for user: {}", savedUser.getId());
+            }
         }
         
-        log.info("Created user with role {} and default profile image: {} -> {}", 
-            role, request.getEmail(), defaultProfileImageUrl);
+        log.info("Created user with role {} and device ID: {} -> {}", 
+            role, request.getDeviceId(), request.getEmail());
         
         return UserResponse.fromUser(savedUser);
     }
@@ -135,6 +139,31 @@ public class UserService implements UserDetailsService {
         
         return UserResponse.fromUser(updatedUser);
     }
+    
+    /**
+     * Map device ID to user only if the user doesn't already have a device ID
+     */
+    public void mapDeviceIdToUser(String userEmail, String deviceId) {
+        log.info("Attempting to map device ID {} to user: {}", deviceId, userEmail);
+        
+        // Find the user first
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", userEmail));
+        
+        // Check if user already has a device ID - if yes, ignore the new device ID
+        if (user.getDeviceId() != null && !user.getDeviceId().trim().isEmpty()) {
+            log.info("User {} already has device ID: {}, ignoring new device ID: {}", 
+                    userEmail, user.getDeviceId(), deviceId);
+            return;
+        }
+        
+        // Map the device ID to the user (multiple users can share the same device ID)
+        user.setDeviceId(deviceId);
+        userRepository.save(user);
+        log.info("Successfully mapped device ID {} to user: {}", deviceId, userEmail);
+    }
+
+
     
     private String getDefaultProfileImageUrl(GENDER gender) {
         try {
@@ -275,11 +304,14 @@ public class UserService implements UserDetailsService {
                 .map(CoinHistoryResponse::fromCoinHistory)
                 .collect(Collectors.toList());
         
+        // Get current coin balance from coin history
+        int currentCoins = rewardService.getValidTotalCoins(userId);
+        
         log.info("User profile statistics for {}: stories={}, likes={}, views={}, comments={}, coins={}, referredBy={}", 
-            userId, totalStories, totalLikes, totalViews, totalComments, user.getCoinBalance(), referredByUserName);
+            userId, totalStories, totalLikes, totalViews, totalComments, currentCoins, referredByUserName);
         
         return UserProfileResponse.fromUserWithReferralInfo(user, totalStories, totalLikes, totalViews, totalComments, 
-                                                          referredByUserName, referralHistory);
+                                                          referredByUserName, referralHistory, currentCoins);
     }
     
     public UserProfileResponse getUserProfile(String userEmail) {

@@ -93,26 +93,7 @@ management:
     mongo:
       enabled: true
 
-# AI Service Configuration
-ai:
-  service:
-    provider: real  # Change to "real" to use actual AI service
-    enabled: true
-    base-url: http://breakup-ai-server:8000 # Replace with your AI service URL
-    api-key: ${AI_SERVICE_API_KEY:your-api-key-here}
-    timeout: 30000
-    max-retries: 3
-    retry-delay: 1000
-    models:
-      text-generation: gpt-3.5-turbo
-      text-analysis: gpt-3.5-turbo
-      transcription: whisper-1
-      image-generation: dall-e-2
-      language-detection: gpt-3.5-turbo
-    rate-limit:
-      requests-per-minute: 60
-      requests-per-hour: 1000
-      max-concurrent-requests: 10
+
 
 
 

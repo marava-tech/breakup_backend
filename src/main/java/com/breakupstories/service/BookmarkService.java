@@ -1,6 +1,6 @@
 package com.breakupstories.service;
 
-import com.breakupstories.dto.BookmarkRequest;
+
 import com.breakupstories.dto.BookmarkResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.StoryResponse;

@@ -40,6 +40,9 @@ public class WithdrawalOptionResponse {
 public class WithdrawalOptionsResponse {
     private List<WithdrawalOptionResponse> options;  // List of withdrawal options
     private String defaultProcessingTime;             // Common processing time for all options
+    private boolean pauseWithdrawals;                 // Whether withdrawals are paused
+    private String pauseWithdrawalsReason;            // Reason for pausing withdrawals
+    private String withdrawalConditions;              // Conditions users must meet for withdrawal
 }
 ```
 
@@ -89,6 +92,27 @@ String defaultProcessingTime = defaultConfigService.getByKey("default_payment_pr
 
 **Fallback**: "3-5 business days" if configuration is not found
 
+### Pause Configuration
+
+The withdrawal pause status and reason are fetched from the default configuration:
+
+```java
+boolean pauseWithdrawals = Boolean.parseBoolean(defaultConfigService.getByKey("pause_withdrawls").getValue());
+String pauseWithdrawalsReason = defaultConfigService.getByKey("pause_withdrawls_reason").getValue();
+```
+
+**Fallback**: `false` for pause status and "Withdrawals are temporarily paused" for reason if configuration is not found
+
+### Withdrawal Conditions
+
+The withdrawal conditions are fetched from the default configuration:
+
+```java
+String withdrawalConditions = defaultConfigService.getByKey("withdrawalConditions").getValue();
+```
+
+**Fallback**: "No specific conditions for withdrawal." if configuration is not found
+
 ## Response Examples
 
 ### Successful Response
@@ -119,7 +143,10 @@ String defaultProcessingTime = defaultConfigService.getByKey("default_payment_pr
         "isEligible": true
       }
     ],
-    "defaultProcessingTime": "3-5 business days"
+    "defaultProcessingTime": "24 hours",
+    "pauseWithdrawals": false,
+    "pauseWithdrawalsReason": "Withdrawals are temporarily paused",
+    "withdrawalConditions": "You must upload at least one active story before you can withdraw coins. Only users who have contributed content to the platform are eligible for withdrawals."
   }
 }
 ```
@@ -152,7 +179,10 @@ String defaultProcessingTime = defaultConfigService.getByKey("default_payment_pr
         "isEligible": true
       }
     ],
-    "defaultProcessingTime": "3-5 business days"
+    "defaultProcessingTime": "24 hours",
+    "pauseWithdrawals": false,
+    "pauseWithdrawalsReason": "Withdrawals are temporarily paused",
+    "withdrawalConditions": "You must upload at least one active story before you can withdraw coins. Only users who have contributed content to the platform are eligible for withdrawals."
   }
 }
 ```
@@ -178,8 +208,20 @@ The API requires the following configuration keys in the `default_config` collec
    - Fallback: 2 coins per rupee
 
 2. **`default_payment_processing_time`**: Default processing time message
-   - Example: "3-5 business days"
+   - Example: "24 hours"
    - Fallback: "3-5 business days"
+
+3. **`pause_withdrawls`**: Whether withdrawals are paused
+   - Example: "true" or "false"
+   - Fallback: false
+
+4. **`pause_withdrawls_reason`**: Reason for pausing withdrawals
+   - Example: "due to technical issues we paused withdrawls"
+   - Fallback: "Withdrawals are temporarily paused"
+
+5. **`withdrawalConditions`**: Conditions users must meet for withdrawal
+   - Example: "You must upload at least one active story before you can withdraw coins"
+   - Fallback: "No specific conditions for withdrawal."
 
 ### Configuration Setup
 
@@ -194,8 +236,29 @@ The API requires the following configuration keys in the `default_config` collec
 
 {
   "key": "default_payment_processing_time",
-  "value": "3-5 business days",
+  "value": "24 hours",
   "description": "Default processing time for withdrawals",
+  "active": true
+}
+
+{
+  "key": "pause_withdrawls",
+  "value": "true",
+  "description": "Allow pause withdrawls",
+  "active": true
+}
+
+{
+  "key": "pause_withdrawls_reason",
+  "value": "due to technical issues we paused withdrawls",
+  "description": "Reason for pause withdrawls",
+  "active": true
+}
+
+{
+  "key": "withdrawalConditions",
+  "value": "You must upload at least one active story before you can withdraw coins. Only users who have contributed content to the platform are eligible for withdrawals.",
+  "description": "Conditions that users must meet to be eligible for withdrawal",
   "active": true
 }
 ```

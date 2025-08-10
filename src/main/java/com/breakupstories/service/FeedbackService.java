@@ -4,7 +4,7 @@ import com.breakupstories.dto.FeedbackRequest;
 import com.breakupstories.dto.FeedbackResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.model.Feedback;
-import com.breakupstories.model.User;
+
 import com.breakupstories.repository.FeedbackRepository;
 import com.breakupstories.repository.UserRepository;
 import com.breakupstories.util.ApplicationContextProvider;

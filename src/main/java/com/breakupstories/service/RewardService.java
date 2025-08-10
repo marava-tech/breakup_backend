@@ -5,11 +5,13 @@ import com.breakupstories.dto.ReferralStatsResponse;
 import com.breakupstories.model.CoinHistory;
 import com.breakupstories.model.Story;
 import com.breakupstories.model.User;
+import com.breakupstories.enums.CoinHistoryEntityType;
 import com.breakupstories.repository.CoinHistoryRepository;
 import com.breakupstories.repository.StoryRepository;
 import com.breakupstories.repository.UserRepository;
 import com.breakupstories.repository.FeedbackRepository;
 import com.breakupstories.util.ApplicationContextProvider;
+import com.breakupstories.util.RequestContext;
 import com.breakupstories.dto.RewardConfigResponse;
 import com.breakupstories.model.Feedback;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -44,14 +47,33 @@ public class RewardService {
     }
     
     /**
-     * Get coin balance and history for a user
+     * Get valid total coins for a user (excluding invalidated entries unless refunded)
+     * 
+     * Calculation rules:
+     * - Include entries where invalidate is false, null, or missing (backward compatibility)
+     * - Include entries where refund is true (even if invalidated)
+     * - Exclude entries where invalidate is true AND refund is false/null
+     */
+    public int getValidTotalCoins(String userId) {
+        List<CoinHistory> validCoinHistory = coinHistoryRepository.findValidCoinHistoryByUserId(userId);
+        return validCoinHistory.stream()
+                .mapToInt(CoinHistory::getCount)
+                .sum();
+    }
+    
+    /**
+     * Get coin balance and history for a user (using valid coins calculation)
+     * 
+     * Backward compatible: Old coin history records without invalidate/refund fields
+     * are automatically included in the total calculation.
      */
     public CoinBalanceResponse getCoinBalance(String userId) {
         List<CoinHistory> coinHistory = coinHistoryRepository.findByUserId(userId);
         coinHistory = coinHistory.stream().sorted(Comparator.comparingLong(CoinHistory::getCreatedAt).reversed()).toList();
-        int totalCoins = coinHistory.stream()
-                .mapToInt(CoinHistory::getCount)
-                .sum();
+        
+        // Calculate total coins excluding invalidated entries (unless refunded)
+        // Includes all old records that don't have invalidate/refund fields
+        int totalCoins = getValidTotalCoins(userId);
         
         return CoinBalanceResponse.builder()
                 .totalCoins(totalCoins)
@@ -63,6 +85,13 @@ public class RewardService {
      * Add coins to user's balance
      */
     public void addCoins(String userId, int count, String reason, String relatedEntityId) {
+        addCoins(userId, count, reason, relatedEntityId, null);
+    }
+    
+    /**
+     * Add coins to user's balance with entity type
+     */
+    public void addCoins(String userId, int count, String reason, String relatedEntityId, CoinHistoryEntityType relatedEntityType) {
         // Check if user already received this reward
         if (relatedEntityId != null && 
             coinHistoryRepository.existsByUserIdAndReasonAndRelatedEntityId(userId, reason, relatedEntityId)) {
@@ -76,31 +105,23 @@ public class RewardService {
                 .count(count)
                 .reason(reason)
                 .relatedEntityId(relatedEntityId)
+                .relatedEntityType(relatedEntityType)
                 .build();
         
         coinHistoryRepository.save(coinHistory);
         
-        // Update user's coin balance
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
-        
-        user.setCoinBalance(user.getCoinBalance() + count);
-        userRepository.save(user);
-        
-        log.info("Added {} coins to user {} for reason: {}", count, userId, reason);
+        log.info("Added {} coins to user {} for reason: {} (entity: {} - {})", 
+                count, userId, reason, relatedEntityType, relatedEntityId);
     }
     
     /**
      * Deduct coins from user's balance
      */
-    public boolean deductCoins(String userId, int count, String reason) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
-        
-        if (user.getCoinBalance() < count) {
-            log.warn("Insufficient coins for user {}. Required: {}, Available: {}", 
-                    userId, count, user.getCoinBalance());
-            return false;
+    public void deductCoins(String userId, int count, String reason) {
+        // Check if user has enough valid coins
+        int availableCoins = getValidTotalCoins(userId);
+        if (availableCoins < count) {
+            throw new RuntimeException("Insufficient coin balance. Available: " + availableCoins + ", Required: " + count);
         }
         
         // Create coin history entry (negative count for deduction)
@@ -112,26 +133,19 @@ public class RewardService {
         
         coinHistoryRepository.save(coinHistory);
         
-        // Update user's coin balance
-        user.setCoinBalance(user.getCoinBalance() - count);
-        userRepository.save(user);
-        
         log.info("Deducted {} coins from user {} for reason: {}", count, userId, reason);
-        return true;
     }
     
     /**
-     * Check and reward for story becoming active with duration > 10 minutes
+     * Check and reward for story active milestone (duration > 10 minutes)
      */
     public void checkStoryActiveReward(String storyId) {
         Story story = storyRepository.findById(storyId)
                 .orElseThrow(() -> new RuntimeException("Story not found with ID: " + storyId));
         
-        if (story.getStatus() == Story.StoryStatus.ACTIVE && 
-            story.getDuration() != null &&
-            story.getDuration() > STORY_DURATION_THRESHOLD) {
-            
-            addCoins(story.getUserId(),Integer.parseInt(defaultConfigService.getByKey("default_story_active_points").getValue()) , "10m_plus_story_active", storyId);
+        // Check if story duration is greater than threshold
+        if (story.getDuration() != null && story.getDuration() >= STORY_DURATION_THRESHOLD) {
+            addCoins(story.getUserId(), Integer.parseInt(defaultConfigService.getByKey("default_story_active_points").getValue()), "story_active", storyId, CoinHistoryEntityType.STORY);
         }
     }
     
@@ -145,7 +159,7 @@ public class RewardService {
         long likeCount = likeService.getLikeCount(storyId);
         
         if (likeCount >= LIKES_MILESTONE) {
-            addCoins(story.getUserId(), Integer.parseInt(defaultConfigService.getByKey("default_100_likes_points").getValue()), "100_plus_likes_milestone", storyId);
+            addCoins(story.getUserId(), Integer.parseInt(defaultConfigService.getByKey("default_100_likes_points").getValue()), "100_plus_likes_milestone", storyId, CoinHistoryEntityType.STORY);
         }
     }
     
@@ -157,7 +171,7 @@ public class RewardService {
                 .orElseThrow(() -> new RuntimeException("Story not found with ID: " + storyId));
         
         if (story.getViewCount() != null && story.getViewCount() >= VIEWS_MILESTONE) {
-            addCoins(story.getUserId(), Integer.parseInt(defaultConfigService.getByKey("default_1000_views_points").getValue()), "1000_plus_views_milestone", storyId);
+            addCoins(story.getUserId(), Integer.parseInt(defaultConfigService.getByKey("default_1000_views_points").getValue()), "1000_plus_views_milestone", storyId, CoinHistoryEntityType.STORY);
         }
     }
     
@@ -181,47 +195,181 @@ public class RewardService {
     }
     
     /**
-     * Process referral when a new user signs up
+     * Process referral when a new user signs up (device-based)
      */
-    public void processReferral(String newUserId, String referralCode) {
+    public void processReferral(String newUserId, String referralCode, String deviceId) {
+        String requestId = RequestContext.getRequestId();
+        log.info("Processing device-based referral for user: {}, device: {}, referral code: {} [RequestID: {}]", 
+                newUserId, deviceId, referralCode, requestId);
+        
+        // Validate device ID
+        if (deviceId == null || deviceId.trim().isEmpty()) {
+            log.warn("Device ID is required for referral processing [RequestID: {}]", requestId);
+            return;
+        }
+        
+        // Get the current user to check their email
+        User newUser = userRepository.findById(newUserId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + newUserId));
+        
+        // Check if this exact device-email combination has already processed a referral
+        // This prevents the same user from claiming referral rewards multiple times
+        if (userRepository.existsByDeviceId(deviceId) && newUser.getReferredBy() != null) {
+            log.info("Device {} with email {} has already used a referral code, skipping referral processing [RequestID: {}]", 
+                    deviceId, newUser.getEmail(), requestId);
+            return;
+        }
+        
+        // Check if this device has already been used by a different email address
+        // We'll still process the referral relationship but give 0 coins
+        boolean deviceUsedByDifferentEmail = userRepository.existsByDeviceIdAndEmailNot(deviceId, newUser.getEmail());
+        if (deviceUsedByDifferentEmail) {
+            log.info("Device {} has already been used by a different email address, will map referredBy but give 0 coins [RequestID: {}]", 
+                    deviceId, requestId);
+        }
+        
+        // Find the referrer by referral code
         Optional<User> referrer = userRepository.findByReferralCode(referralCode);
         
         if (referrer.isPresent()) {
-            User newUser = userRepository.findById(newUserId)
-                    .orElseThrow(() -> new RuntimeException("User not found: " + newUserId));
             
-            // Update new user's referred by field
+            // Check if referrer has reached maximum referrals limit by counting referred users
+            long referrerReferralCount = userRepository.findByReferredBy(referrer.get().getId()).size();
+            int maxReferralsPerUser = Integer.parseInt(defaultConfigService.getByKey("max_referrals_per_user").getValue());
+            
+            if (referrerReferralCount >= maxReferralsPerUser) {
+                log.warn("Referrer {} has reached maximum referrals limit ({}), skipping referral [RequestID: {}]", 
+                        referrer.get().getId(), maxReferralsPerUser, requestId);
+                return;
+            }
+            
+            // Update new user's referred by field and device ID
             newUser.setReferredBy(referrer.get().getId());
+            newUser.setDeviceId(deviceId);
             userRepository.save(newUser);
+            log.info("Updated user {} with referrer {} and device ID {} [RequestID: {}]", 
+                    newUserId, referrer.get().getId(), deviceId, requestId);
 
-           int referralRewardPoints =  Integer.parseInt(defaultConfigService.getByKey("default_referral_reward_points").getValue());
-            int referralWelcomePoints =  Integer.parseInt(defaultConfigService.getByKey("default_referral_welcome_points").getValue());
+            // Determine coin amounts based on whether device was used by different email
+            int referralRewardPoints;
+            int referralWelcomePoints;
+            
+            if (!deviceUsedByDifferentEmail) {
+                // Normal referral - give full coins
+                referralRewardPoints = Integer.parseInt(defaultConfigService.getByKey("default_referral_reward_points").getValue());
+                referralWelcomePoints = Integer.parseInt(defaultConfigService.getByKey("default_referral_welcome_points").getValue());
+                
+                log.info("Processing normal referral with full coin rewards [RequestID: {}]", requestId);
+            } else {
+                // Device used by different email - give 0 coins but still map relationship
+                referralRewardPoints = 0;
+                referralWelcomePoints = 0;
+                
+                log.info("Processing referral with 0 coins due to device being used by different email [RequestID: {}]", requestId);
+            }
 
-            // Reward the referrer
-            addCoins(referrer.get().getId(), referralRewardPoints, "referral_reward_"+newUser.getName(), newUserId);
+            // Reward the referrer (0 if device used by different email)
+            addCoins(referrer.get().getId(), referralRewardPoints, "referral_reward_"+newUser.getName(), newUserId, CoinHistoryEntityType.USER);
             
-            // Reward the referred user
-            addCoins(newUserId, referralWelcomePoints, "referral_welcome", referrer.get().getId());
+            // Reward the referred user (0 if device used by different email)
+            addCoins(newUserId, referralWelcomePoints, "referral_welcome", referrer.get().getId(), CoinHistoryEntityType.USER);
             
-            log.info("Processed referral: {} referred {} (referrer: {} coins, referred: {} coins)", 
-                    referrer.get().getId(), newUserId, referralRewardPoints, referralWelcomePoints);
+            log.info("Processed device-based referral: {} referred {} (referrer: {} coins, referred: {} coins) [RequestID: {}]", 
+                    referrer.get().getId(), newUserId, referralRewardPoints, referralWelcomePoints, requestId);
         } else {
-            log.warn("Invalid referral code: {}", referralCode);
+            log.warn("Invalid referral code: {} [RequestID: {}]", referralCode, requestId);
         }
     }
+
     
     /**
-     * Get referral statistics for a user
+     * Get referral statistics for a user (updated to use user-based referrals)
      */
     public ReferralStatsResponse getReferralStats(String userId) {
         List<User> referredUsers = userRepository.findByReferredBy(userId);
+        List<String> referredUserIds = referredUsers.stream()
+                .map(User::getId)
+                .collect(Collectors.toList());
         
         return ReferralStatsResponse.builder()
                 .referralCode(userRepository.findById(userId).map(User::getReferralCode).orElse(null))
                 .referredBy(userRepository.findById(userId).map(User::getReferredBy).orElse(null))
                 .referredUsersCount(referredUsers.size())
-                .referredUsers(referredUsers.stream().map(User::getId).toList())
+                .referredUsers(referredUserIds)
                 .build();
+    }
+    
+    /**
+     * Check if a device has already used a referral code
+     */
+    public boolean hasDeviceUsedReferral(String deviceId) {
+        return userRepository.existsByDeviceId(deviceId);
+    }
+    
+    /**
+     * Check if a device has already used a referral code with a different email
+     */
+    public boolean hasDeviceUsedReferralWithDifferentEmail(String deviceId, String email) {
+        return userRepository.existsByDeviceIdAndEmailNot(deviceId, email);
+    }
+    
+    /**
+     * Get device referral information
+     */
+    public Optional<User> getDeviceReferral(String deviceId) {
+        return userRepository.findByDeviceId(deviceId);
+    }
+    
+    /**
+     * Invalidate a coin history entry
+     */
+    public void invalidateCoinHistory(String coinHistoryId, String invalidationReason, Boolean refund) {
+        CoinHistory coinHistory = coinHistoryRepository.findById(coinHistoryId)
+                .orElseThrow(() -> new RuntimeException("Coin history not found with ID: " + coinHistoryId));
+        
+        if (coinHistory.getInvalidate() != null && coinHistory.getInvalidate()) {
+            throw new RuntimeException("Coin history is already invalidated");
+        }
+        
+        coinHistory.setInvalidate(true);
+        coinHistory.setInvalidationReason(invalidationReason);
+        coinHistory.setRefund(refund);
+        
+        coinHistoryRepository.save(coinHistory);
+        
+        String userId = coinHistory.getUserId();
+        log.info("Invalidated coin history {} for user {} with reason: {} (refund: {})", 
+                coinHistoryId, userId, invalidationReason, refund);
+    }
+    
+    /**
+     * Manually add coin history entry (for admin operations, corrections, special rewards)
+     */
+    public CoinHistory addCoinHistoryManually(String userId, int count, String reason, 
+                                            String relatedEntityId, CoinHistoryEntityType relatedEntityType,
+                                            Boolean invalidate, String invalidationReason, Boolean refund) {
+        // Validate user exists
+        userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+        
+        // Create coin history entry
+        CoinHistory coinHistory = CoinHistory.builder()
+                .userId(userId)
+                .count(count)
+                .reason(reason)
+                .relatedEntityId(relatedEntityId)
+                .relatedEntityType(relatedEntityType)
+                .invalidate(invalidate != null ? invalidate : false)
+                .invalidationReason(invalidationReason)
+                .refund(refund != null ? refund : false)
+                .build();
+        
+        CoinHistory savedCoinHistory = coinHistoryRepository.save(coinHistory);
+        
+        log.info("Manually added coin history: {} coins for user {} with reason: {} (entity: {} - {}, invalidate: {}, refund: {})", 
+                count, userId, reason, relatedEntityType, relatedEntityId, invalidate, refund);
+        
+        return savedCoinHistory;
     }
     
     /**
@@ -244,7 +392,7 @@ public class RewardService {
         
         if (totalResolvedFeedbacks >= 5) {
             int rewardPoints = Integer.parseInt(defaultConfigService.getByKey("5_feedbacks_points").getValue());
-            addCoins(userId, rewardPoints, "feedback_pro", null);
+            addCoins(userId, rewardPoints, "feedback_pro", null, CoinHistoryEntityType.SYSTEM);
             log.info("Awarded {} coins to user {} for feedback pro milestone ({} resolved feedbacks)", 
                 rewardPoints, userId, totalResolvedFeedbacks);
         }
@@ -301,5 +449,4 @@ public class RewardService {
         
         return RewardConfigResponse.fromConfigMaps(rewardConfigs, referralConfigs);
     }
-    
-} 
+}

@@ -81,17 +81,8 @@ POST /api/v1/story-rewrite/rewrite
 
 ## Configuration
 
-### AI Service Configuration
-```yaml
-ai:
-  service:
-    base-url: http://localhost:8000  # AI service base URL
-    timeout: 30000
-    max-retries: 3
-```
-
 ### External AI Service
-The system integrates with an external AI service that provides transcription and story rewrite capabilities:
+The system integrates with an external AI service that provides transcription and story rewrite capabilities. The AI service is now independent and runs separately from this application.
 
 **Transcription Endpoint:** `POST {base-url}/transcription/transcribe-url`
 

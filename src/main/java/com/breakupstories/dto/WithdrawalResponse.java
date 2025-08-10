@@ -23,6 +23,7 @@ public class WithdrawalResponse {
     private String upiId;
     private Withdrawal.WithdrawalStatus status;
     private String withdrawalProofImageUrl;
+    private String comments;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
@@ -36,6 +37,7 @@ public class WithdrawalResponse {
                 .upiId(withdrawal.getUpiId())
                 .status(withdrawal.getStatus())
                 .withdrawalProofImageUrl(withdrawal.getWithdrawalProofImageUrl())
+                .comments(withdrawal.getComments())
                 .createdAt(withdrawal.getCreatedAt())
                 .updatedAt(withdrawal.getUpdatedAt())
                 .build();

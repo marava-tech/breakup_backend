@@ -52,7 +52,7 @@ public class HealthController {
         response.put("message", "All systems operational");
         response.put("timestamp", LocalDateTime.now());
         response.put("service", "Breakup Stories Backend");
-        response.put("version", "1.7");
+        response.put("version", "1.8");
         
         Map<String, String> components = new HashMap<>();
         components.put("database", "UP");

@@ -1,6 +1,6 @@
 package com.breakupstories.repository;
 
-import com.breakupstories.model.Story;
+
 import com.breakupstories.model.StoryDataStore;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -172,4 +172,16 @@ public interface StoryDataStoreRepository extends MongoRepository<StoryDataStore
      */
     @Query("{'uploadMetadata.lat': {$exists: true, $ne: null, $ne: ''}, 'uploadMetadata.long': {$exists: true, $ne: null, $ne: ''}, 'processingStatus': ?0}")
     List<StoryDataStore> findStoriesWithLocationCoordinatesAndStatus(StoryDataStore.ProcessingStatus processingStatus);
+    
+    /**
+     * Find stories with isConversionPending = true, ordered by creation time (oldest first)
+     */
+    @Query(value = "{'isConversionPending': true}", sort = "{'createdAt': 1}")
+    List<StoryDataStore> findByIsConversionPendingTrueOrderByCreatedAtAsc();
+    
+    /**
+     * Find stories with isConversionPending = true with limit, ordered by creation time (oldest first)
+     */
+    @Query(value = "{'isConversionPending': true}", sort = "{'createdAt': 1}")
+    List<StoryDataStore> findByIsConversionPendingTrueOrderByCreatedAtAscLimit(int limit);
 } 

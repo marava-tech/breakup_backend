@@ -4,6 +4,8 @@ import com.breakupstories.dto.TranscriptionResponse;
 import com.breakupstories.dto.StoryRewriteResponse;
 import com.breakupstories.dto.ParagraphRewriteResponse;
 import com.breakupstories.dto.StoryAnalysisResponse;
+import com.breakupstories.dto.VisualPromptResponse;
+import com.breakupstories.dto.ImagesResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,7 +28,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "story_data_store")
-public class  StoryDataStore {
+public class StoryDataStore {
     
     @Id
     private String id;
@@ -52,6 +54,10 @@ public class  StoryDataStore {
     private StoryRewriteResponse storyRewriteResponse;
     private ParagraphRewriteResponse paragraphRewriteResponse;
     private StoryAnalysisResponse storyAnalysisResponse;
+    private VisualPromptResponse visualPromptResponse;
+    
+    // Images response
+    private ImagesResponse imagesResponse;
     
     // Processing status for AI steps
     private ProcessingStatus processingStatus;
@@ -63,6 +69,7 @@ public class  StoryDataStore {
     private String rewriteError;
     private String paragraphError;
     private String analysisError;
+    private String visualPromptError;
     private Map<String, String> stepErrors; // Detailed errors for each step
     
     // Processing metadata
@@ -70,6 +77,7 @@ public class  StoryDataStore {
     private LocalDateTime rewriteCompletedAt;
     private LocalDateTime paragraphCompletedAt;
     private LocalDateTime analysisCompletedAt;
+    private LocalDateTime visualPromptCompletedAt;
     private LocalDateTime processingStartedAt;
     private LocalDateTime processingCompletedAt;
     
@@ -78,6 +86,8 @@ public class  StoryDataStore {
     
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    private boolean isConversionPending;
     
     public enum ProcessingStatus {
         UPLOAD_PENDING,    // Initial state - waiting for upload
@@ -88,7 +98,7 @@ public class  StoryDataStore {
         CONVERTING,        // Converting to final Story
         COMPLETED,         // All processing steps completed
         FAILED,            // Processing failed
-        REJECTED           // Story was rejected
+        REJECTED          // Story was rejecte
     }
     
     /**

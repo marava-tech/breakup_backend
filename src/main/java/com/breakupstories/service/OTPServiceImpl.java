@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
+
 import com.breakupstories.util.TimestampUtil;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -102,6 +102,12 @@ public class OTPServiceImpl implements OTPService {
 
     @Override
     public boolean sendOtp(String email) {
+        // Special exception for testing email - bypass OTP sending
+        if ("hollypoter5@gmail.com".equals(email)) {
+            log.info("Bypassing OTP sending for testing email: {}", email);
+            return true;
+        }
+        
         var otp = generateOtp();
         emailOtpMap.put(email, otp);
         try {
@@ -121,6 +127,12 @@ public class OTPServiceImpl implements OTPService {
 
     @Override
     public boolean verifyOtp(String email, String providedOtp) {
+        // Special exception for testing email - bypass OTP verification
+        if ("hollypoter5@gmail.com".equals(email)) {
+            log.info("Bypassing OTP verification for testing email: {}", email);
+            return true;
+        }
+        
         try {
             String storedOtp = emailOtpMap.get(email);
             if (storedOtp == null) {

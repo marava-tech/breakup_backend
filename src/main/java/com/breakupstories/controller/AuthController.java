@@ -2,9 +2,12 @@ package com.breakupstories.controller;
 
 import com.breakupstories.dto.*;
 import com.breakupstories.exception.InvalidOTPException;
+import com.breakupstories.service.BannedDeviceService;
 import com.breakupstories.service.JwtService;
 import com.breakupstories.service.OTPService;
 import com.breakupstories.service.UserService;
+import com.breakupstories.service.RewardService;
+import com.breakupstories.service.DeviceMappingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -13,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
+
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +30,8 @@ public class AuthController {
     private final UserService userService;
     private final JwtService jwtService;
     private final OTPService otpService;
+    private final RewardService rewardService;
+    private final DeviceMappingService deviceMappingService;
     
     @PostMapping("/send-otp-registration")
     @Operation(summary = "Send OTP for registration", description = "Send OTP to email for new user registration")
@@ -63,7 +68,7 @@ public class AuthController {
     @PostMapping("/verify-otp-registration")
     @Operation(summary = "Verify OTP and register user", description = "Verify OTP and create new user account")
     public ResponseEntity<AuthResponse> verifyOtpAndRegister(@Valid @RequestBody RegistrationRequest request) {
-        log.info("Verifying OTP for registration with email: {}", request.getEmail());
+        log.info("Verifying OTP for registration with email: {} and device ID: {}", request.getEmail(), request.getDeviceId());
         
         // Verify OTP first
         boolean otpValid = otpService.verifyOtp(request.getEmail(), request.getOtp());
@@ -81,6 +86,7 @@ public class AuthController {
                 .preferredStoryLanguage(request.getPreferredStoryLanguage())
                 .role(request.getRole())
                 .referralCode(request.getReferralCode())
+                .deviceId(request.getDeviceId()) // Include device ID for referral tracking
                 .build();
         
         // Create user after OTP verification
@@ -92,20 +98,25 @@ public class AuthController {
         
         AuthResponse response = AuthResponse.of(token, user);
         
-        log.info("User registered successfully with email: {}", request.getEmail());
+        log.info("User registered successfully with email: {} and device ID: {}", request.getEmail(), request.getDeviceId());
         return ResponseEntity.ok(response);
     }
     
     @PostMapping("/verify-otp-login")
     @Operation(summary = "Verify OTP and login", description = "Verify OTP and login existing user")
     public ResponseEntity<AuthResponse> verifyOtpAndLogin(@Valid @RequestBody OtpVerificationRequest request) {
-        log.info("Verifying OTP for login with email: {}", request.getEmail());
+        log.info("Verifying OTP for login with email: {} and device ID: {}", request.getEmail(), request.getDeviceId());
         
         // Verify OTP first
         boolean otpValid = otpService.verifyOtp(request.getEmail(), request.getOtp());
         if (!otpValid) {
             log.error("OTP verification failed for login with email: {}", request.getEmail());
             throw new InvalidOTPException("Invalid OTP provided for login");
+        }
+        
+        // Handle device ID mapping if provided (asynchronously)
+        if (request.getDeviceId() != null && !request.getDeviceId().trim().isEmpty()) {
+            deviceMappingService.mapDeviceIdToUserAsync(request.getEmail(), request.getDeviceId());
         }
         
         // Get user and generate JWT token
@@ -115,7 +126,7 @@ public class AuthController {
         
         AuthResponse response = AuthResponse.of(token, user);
         
-        log.info("User logged in successfully with email: {}", request.getEmail());
+        log.info("User logged in successfully with email: {} and device ID: {}", request.getEmail(), request.getDeviceId());
         return ResponseEntity.ok(response);
     }
     
@@ -149,6 +160,21 @@ public class AuthController {
         AuthResponse response = AuthResponse.of(newToken, user);
         
         log.info("Token refreshed successfully for user: {}", userDetails.getUsername());
+        return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/device-referral-status/{deviceId}")
+    @Operation(summary = "Check device referral status", description = "Check if a device has already used a referral code (Public endpoint)")
+    public ResponseEntity<DeviceReferralStatusResponse> getDeviceReferralStatus(@PathVariable String deviceId) {
+        log.info("Device referral status request for device: {}", deviceId);
+        
+        boolean hasUsedReferral = rewardService.hasDeviceUsedReferral(deviceId);
+        
+        DeviceReferralStatusResponse response = DeviceReferralStatusResponse.builder()
+                .deviceId(deviceId)
+                .hasUsedReferral(hasUsedReferral)
+                .build();
+        
         return ResponseEntity.ok(response);
     }
 } 

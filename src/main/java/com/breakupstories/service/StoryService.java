@@ -8,14 +8,15 @@ import com.breakupstories.dto.CommentResponse;
 import com.breakupstories.dto.StorySearchRequest;
 import com.breakupstories.dto.StorySearchResponse;
 import com.breakupstories.dto.StoryWithTrendingScore;
-import com.breakupstories.dto.TranscriptionResponse;
+import com.breakupstories.dto.WithdrawalEligibilityResponse;
+
 import com.breakupstories.model.Story;
 import com.breakupstories.model.StoryDataStore;
 import com.breakupstories.model.StoryMetadata;
 import com.breakupstories.model.User;
 import com.breakupstories.repository.StoryRepository;
 import com.breakupstories.repository.StoryDataStoreRepository;
-import com.breakupstories.repository.UserRepository;
+
 import com.breakupstories.util.ApplicationContextProvider;
 import com.breakupstories.util.RequestContext;
 import com.breakupstories.util.ListUtils;
@@ -44,7 +45,6 @@ public class StoryService {
     
     private final StoryRepository storyRepository;
     private final StoryDataStoreRepository storyDataStoreRepository;
-    private final UserRepository userRepository;
     private final LikeService likeService;
     private final CommentService commentService;
     @Lazy
@@ -60,6 +60,9 @@ public class StoryService {
         log.info("Creating story for user: {} [RequestID: {}]", userId, requestId);
         
         try {
+            // Step 0: Check story creation eligibility
+            defaultConfigService.checkStoryCreationEligibility(userId);
+            
             // Step 1: Validate audio file
             MultipartFile audioFile = request.getFile("audio");
             if (audioFile == null || audioFile.isEmpty()) {
@@ -153,6 +156,9 @@ public class StoryService {
         log.info("Creating written story for user: {} [RequestID: {}]", userId, requestId);
         
         try {
+            // Step 0: Check story creation eligibility
+            defaultConfigService.checkStoryCreationEligibility(userId);
+            
             // Step 1: Validate request
             if (request.getStoryText() == null || request.getStoryText().trim().isEmpty()) {
                 throw new IllegalArgumentException("Story text is required");
@@ -194,13 +200,6 @@ public class StoryService {
             String storyId = savedStory.getId();
             log.info("Initial written story created with ID: {} for user: {} [RequestID: {}]", storyId, userId, requestId);
             
-            // Step 4: Create TranscriptionResponse with user-entered text
-            TranscriptionResponse transcriptionResponse = TranscriptionResponse.builder()
-                    .transcript(request.getStoryText())
-                    .language(request.getLanguage())
-                    .confidence(1.0) // Set confidence to 1 for written stories
-                    .build();
-            
             // Step 5: Create StoryDataStore with PROCESSING_PENDING status and transcription response
             StoryDataStore dataStore = StoryDataStore.builder()
                     .id(storyId)
@@ -209,7 +208,6 @@ public class StoryService {
                     .language(request.getLanguage())
                     .processingStatus(StoryDataStore.ProcessingStatus.PROCESSING_PENDING) // Skip upload step
                     .uploadMetadata(uploadMetadata)
-                    .transcriptionResponse(transcriptionResponse) // Store the transcription response
                     .transcriptionCompletedAt(TimestampUtil.currentLocalDateTime()) // Mark transcription as completed
                     .createdAt(TimestampUtil.currentLocalDateTime())
                     .updatedAt(TimestampUtil.currentLocalDateTime())
@@ -644,7 +642,157 @@ public class StoryService {
         return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
     }
     
+    /**
+     * Get my stories from Story entity only (no StoryDataStore data)
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of stories with status from Story entity only
+     */
+    public PagedResponse<StoryResponse> getMyStories(String currentUserId, int page, int size) {
+        String requestId = RequestContext.getRequestId();
+        log.info("Getting my stories from Story entity for user: {} [RequestID: {}]", currentUserId, requestId);
+        
+        try {
+            // Get all Story entities for the user with pagination
+            Pageable pageable = PageRequest.of(page, size);
+            Page<Story> storyPage = storyRepository.findByUserIdOrderByCreatedAtDesc(currentUserId, pageable);
+            
+            // Convert to StoryResponse objects using only Story entity data
+            List<StoryResponse> stories = storyPage.getContent().stream()
+                    .map(story -> {
+                        try {
+                            User user = userService.getUserEntityById(story.getUserId());
+                            // Create StoryResponse using only Story entity data
+                            return StoryResponse.fromStory(story, user);
+                        } catch (Exception e) {
+                            log.error("Error creating StoryResponse for story {} [RequestID: {}]: {}", 
+                                    story.getId(), requestId, e.getMessage());
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            
+            log.info("Returning {} my stories from Story entity for user {} [RequestID: {}]", 
+                    stories.size(), currentUserId, requestId);
+            
+            return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+            
+        } catch (Exception e) {
+            log.error("Error getting my stories from Story entity for user {} [RequestID: {}]: {}", 
+                    currentUserId, requestId, e.getMessage(), e);
+            throw new RuntimeException("Failed to get my stories: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Get my stories from StoryDataStore collection (fetching status from StoryDataStore instead of Story)
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of stories with status from StoryDataStore
+     */
+    public PagedResponse<StoryResponse> getMyStoriesFromDataStore(String currentUserId, int page, int size) {
+        String requestId = RequestContext.getRequestId();
+        log.info("Getting my stories from StoryDataStore for user: {} [RequestID: {}]", currentUserId, requestId);
+        
+        try {
+            // Get all StoryDataStore entries for the user
+            List<StoryDataStore> userDataStores = storyDataStoreRepository.findByUserId(currentUserId);
+            
+            // Sort by creation date (newest first)
+            userDataStores.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
+            
+            // Apply pagination
+            int startIndex = page * size;
+            int endIndex = Math.min(startIndex + size, userDataStores.size());
+            
+            List<StoryDataStore> paginatedDataStores = userDataStores.subList(startIndex, endIndex);
+            
+            // Convert to StoryResponse objects
+            List<StoryResponse> stories = paginatedDataStores.stream()
+                    .map(dataStore -> {
+                        try {
+                            // Get the corresponding Story entity for additional data
+                            Story story = storyRepository.findById(dataStore.getStoryId()).orElse(null);
+                            User user = userService.getUserEntityById(dataStore.getUserId());
+                            
+                            // Get interaction data
+                            boolean likedByMe = likeService.isLiked(currentUserId, dataStore.getStoryId());
+                            boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, dataStore.getStoryId());
+                            long likeCount = getLikeCount(dataStore.getStoryId());
+                            long commentCount = getCommentCount(dataStore.getStoryId());
+                            
+                            // Convert ProcessingStatus to StoryStatus
+                            Story.StoryStatus storyStatus = convertProcessingStatusToStoryStatus(dataStore.getProcessingStatus());
+                            
+                            // Create StoryResponse with status from StoryDataStore
+                            // Use status from StoryDataStore
 
+                            return StoryResponse.builder()
+                                    .id(dataStore.getStoryId())
+                                    .userId(dataStore.getUserId())
+                                    .username(user != null ? user.getName() : null)
+                                    .title(dataStore.getTitle() != null ? dataStore.getTitle() : (story != null ? story.getTitle() : "Processing..."))
+                                    .audioUrl(dataStore.getAudioUrl() != null ? dataStore.getAudioUrl() : (story != null ? story.getAudioUrl() : null))
+                                    .thumbnailUrl(story != null ? story.getThumbnailUrl() : null)
+                                    .storyImages(story != null ? story.getStoryImages() : null)
+                                    .viewCount(story != null ? story.getViewCount() : 0L)
+                                    .likeCount(likeCount)
+                                    .commentCount(commentCount)
+                                    .status(storyStatus) // Use status from StoryDataStore
+                                    .language(dataStore.getLanguage())
+                                    .rejectionReasons(story != null ? story.getRejectionReasons() : null)
+                                    .contents(story != null ? story.getContents() : null)
+                                    .tags(story != null ? story.getTags() : null)
+                                    .createdAt(dataStore.getCreatedAt())
+                                    .updatedAt(dataStore.getUpdatedAt())
+                                    .isLikedByMe(likedByMe)
+                                    .isBookmarkedByMe(bookmarkedByMe)
+                                    .creationType(story != null ? story.getCreationType() : Story.CreationType.UPLOADED)
+                                    .build();
+                        } catch (Exception e) {
+                            log.error("Error creating StoryResponse for dataStore {} [RequestID: {}]: {}", 
+                                    dataStore.getStoryId(), requestId, e.getMessage());
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            
+            log.info("Returning {} my stories from StoryDataStore for user {} [RequestID: {}]", 
+                    stories.size(), currentUserId, requestId);
+            
+            return PagedResponse.of(stories, page, size, userDataStores.size());
+            
+        } catch (Exception e) {
+            log.error("Error getting my stories from StoryDataStore for user {} [RequestID: {}]: {}", 
+                    currentUserId, requestId, e.getMessage(), e);
+            throw new RuntimeException("Failed to get my stories: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Convert StoryDataStore.ProcessingStatus to Story.StoryStatus
+     */
+    private Story.StoryStatus convertProcessingStatusToStoryStatus(StoryDataStore.ProcessingStatus processingStatus) {
+        if (processingStatus == null) {
+            return Story.StoryStatus.UPLOAD_PENDING;
+        }
+        
+        return switch (processingStatus) {
+            case UPLOAD_PENDING -> Story.StoryStatus.UPLOAD_PENDING;
+            case UPLOADING -> Story.StoryStatus.UPLOADING;
+            case PROCESSING_PENDING -> Story.StoryStatus.PROCESSING_PENDING;
+            case PROCESSING -> Story.StoryStatus.PROCESSING;
+            case PROCESSED -> Story.StoryStatus.PROCESSED;
+            case CONVERTING -> Story.StoryStatus.CONVERTING;
+            case COMPLETED -> Story.StoryStatus.ACTIVE;
+            case FAILED -> Story.StoryStatus.FAILED;
+            case REJECTED -> Story.StoryStatus.REJECTED;
+        };
+    }
     
     /**
      * Get stories by language with user context (includes likedByMe status)
@@ -956,6 +1104,106 @@ public class StoryService {
     public PagedResponse<StoryResponse> getLatestStoriesByLanguage(String language, String currentUserId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByCreatedAtDesc(language, Story.StoryStatus.ACTIVE, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get voice stories (stories with UPLOADED creation type) sorted by creation date (newest first) - for authenticated users
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of voice stories with user context
+     */
+    public PagedResponse<StoryResponse> getVoiceStories(String currentUserId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusOrderByCreatedAtDesc(
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get voice stories (stories with UPLOADED creation type) sorted by creation date (newest first) - for unauthenticated users
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of voice stories
+     */
+    public PagedResponse<StoryResponse> getVoiceStories(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusOrderByCreatedAtDesc(
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get voice stories by language (stories with UPLOADED creation type) sorted by creation date (newest first) - for unauthenticated users
+     * @param language The language to filter by
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of voice stories in the specified language
+     */
+    public PagedResponse<StoryResponse> getVoiceStoriesByLanguage(String language, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusAndLanguageOrderByCreatedAtDesc(
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, language, pageable);
+        
+        List<StoryResponse> stories = storyPage.getContent().stream()
+                .map(story -> {
+                    User user = userService.getUserEntityById(story.getUserId());
+                    long likeCount = getLikeCount(story.getId());
+                    long commentCount = getCommentCount(story.getId());
+                    return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
+                })
+                .collect(Collectors.toList());
+        
+        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+    }
+    
+    /**
+     * Get voice stories by language (stories with UPLOADED creation type) sorted by creation date (newest first) - for authenticated users
+     * @param language The language to filter by
+     * @param currentUserId The current user ID
+     * @param page Page number
+     * @param size Page size
+     * @return PagedResponse of voice stories in the specified language with user context
+     */
+    public PagedResponse<StoryResponse> getVoiceStoriesByLanguage(String language, String currentUserId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusAndLanguageOrderByCreatedAtDesc(
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, language, pageable);
         
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -1553,6 +1801,45 @@ public class StoryService {
             log.error("Error getting trending stories by language {} for user {} [RequestID: {}]: {}", 
                     language, currentUserId, requestId, e.getMessage(), e);
             throw new RuntimeException("Failed to get trending stories by language: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Check if a user has an active story with UPLOADED creation type
+     * This is used to determine withdrawal eligibility
+     * @param userId The user ID to check
+     * @return WithdrawalEligibilityResponse with eligibility status
+     */
+    public WithdrawalEligibilityResponse checkWithdrawalEligibility(String userId) {
+        String requestId = RequestContext.getRequestId();
+        log.info("Checking withdrawal eligibility for user: {} [RequestID: {}]", userId, requestId);
+        
+        try {
+            boolean hasUploadedActiveStory = storyRepository.existsByUserIdAndStatusAndCreationType(
+                userId, 
+                Story.StoryStatus.ACTIVE, 
+                Story.CreationType.UPLOADED
+            );
+            
+            String message = hasUploadedActiveStory 
+                ? "User has uploaded an active story and is eligible for withdrawal"
+                : "no active uploaded stories so not eligible for withdrawal";
+            
+            WithdrawalEligibilityResponse response = WithdrawalEligibilityResponse.builder()
+                    .userId(userId)
+                    .hasUploadedActiveStory(hasUploadedActiveStory)
+                    .message(message)
+                    .build();
+            
+            log.info("Withdrawal eligibility check completed for user: {} - Eligible: {} [RequestID: {}]", 
+                    userId, hasUploadedActiveStory, requestId);
+            
+            return response;
+            
+        } catch (Exception e) {
+            log.error("Error checking withdrawal eligibility for user {} [RequestID: {}]: {}", 
+                    userId, requestId, e.getMessage(), e);
+            throw new RuntimeException("Failed to check withdrawal eligibility: " + e.getMessage(), e);
         }
     }
 } 

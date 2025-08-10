@@ -1,6 +1,6 @@
 package com.breakupstories.dto;
 
-import com.breakupstories.dto.StoryResponse;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

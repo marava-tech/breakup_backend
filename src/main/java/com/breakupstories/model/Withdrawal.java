@@ -26,6 +26,7 @@ public class Withdrawal {
     private String upiId;
     private WithdrawalStatus status;
     private String withdrawalProofImageUrl;
+    private String comments; // Admin comments for withdrawal status updates
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     

@@ -1,5 +1,6 @@
 package com.breakupstories.model;
 
+import com.breakupstories.enums.CoinHistoryEntityType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,7 +22,16 @@ public class CoinHistory {
     private String userId;
     private int count;
     private String reason;
-    private String relatedEntityId; // Optional: for story-based rewards, like storyId
+    private String relatedEntityId; // Optional: ID of related entity
+    private CoinHistoryEntityType relatedEntityType; // Optional: Type of related entity
+    
+    @Builder.Default
+    private Boolean invalidate = false; // Default false - whether this entry is invalidated
+    
+    private String invalidationReason; // Default null - reason for invalidation
+    
+    @Builder.Default
+    private Boolean refund = false; // Default false - whether this invalidation should be refunded
     
     @CreatedDate
     private Long createdAt;

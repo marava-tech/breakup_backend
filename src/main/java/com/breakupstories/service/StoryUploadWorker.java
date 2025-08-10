@@ -2,10 +2,9 @@ package com.breakupstories.service;
 
 import com.breakupstories.model.Story;
 import com.breakupstories.model.StoryDataStore;
-import com.breakupstories.model.User;
+
 import com.breakupstories.repository.StoryDataStoreRepository;
-import com.breakupstories.repository.StoryRepository;
-import com.breakupstories.repository.UserRepository;
+
 import com.breakupstories.util.RequestIdGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -117,8 +116,15 @@ public class StoryUploadWorker {
             dataStore.setAudioUrl(audioUrl);
             dataStore.setDuration(duration);
 
-            //remove the byte array.
-            dataStore.getUploadMetadata().remove("audioFileData");
+            // Remove audio file data from upload metadata to save storage
+            if (dataStore.getUploadMetadata() != null) {
+                dataStore.getUploadMetadata().remove("audioFileData");
+                dataStore.getUploadMetadata().remove("audioFileName");
+                dataStore.getUploadMetadata().remove("audioContentType");
+                dataStore.getUploadMetadata().remove("audioFileSize");
+                log.info("Removed audio file data from upload metadata for story: {} (Request ID: {})", dataStore.getId(), requestId);
+            }
+            
             storyDataStoreRepository.save(dataStore); // Save the updated data store
             
             // Update status to PROCESSING_PENDING using StoryStatusService

@@ -69,5 +69,45 @@
     "value": "5",
     "description": "Minimum duration in minutes for first story reward",
     "active": true
+  },
+  {
+    "key": "pause_withdrawls",
+    "value": "true",
+    "description": "Allow pause withdrawls",
+    "active": true
+  },    {
+    "key": "pause_withdrawls_reason",
+    "value": "due to technical issues we paused withdrawls",
+    "description": "Reason for pause withdrawls",
+    "active": true
+  },
+  {
+    "key": "app_config_max_story_duration_minutes",
+    "value": "25",
+    "description": "Maximum story duration in minutes",
+    "active": true
+  }  ,{
+    "key": "app_config_max_written_story_length_characters",
+    "value": "3000",
+    "description": "Maximum written story length in characters",
+    "active": true
+  },
+  {
+    "key": "user_story_limit",
+    "value": "2",
+    "description": "Maximum number of stories a user can create",
+    "active": true
+  },
+  {
+    "key": "app_config_story_creation_rules",
+    "value": "1. Please share your own breakup story.\n2. you have complete freedom to hide any personal informations or modify events.\n3. sharing your story helps lot of people to heal from their breakup.\n4. don't share stories from chatgpt , youtube or from any online content",
+    "description": "Story creation rules and guidelines for users",
+    "active": true
+  },
+  {
+    "key": "app_config_app_version_code",
+    "value": "21",
+    "description": "frontend app version code",
+    "active": true
   }
 ]

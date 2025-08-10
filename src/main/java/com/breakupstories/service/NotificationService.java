@@ -4,9 +4,7 @@ import com.breakupstories.dto.NotificationItem;
 import com.breakupstories.dto.NotificationResponse;
 import com.breakupstories.enums.DeeplinkType;
 import com.breakupstories.model.Audit;
-import com.breakupstories.model.Story;
-import com.breakupstories.repository.AuditRepository;
-import com.breakupstories.repository.StoryRepository;
+
 import com.breakupstories.util.TimestampUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,8 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+
 
 @Service
 @RequiredArgsConstructor

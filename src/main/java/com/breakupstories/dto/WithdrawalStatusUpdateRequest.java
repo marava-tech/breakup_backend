@@ -16,4 +16,7 @@ public class WithdrawalStatusUpdateRequest {
     
     @NotNull(message = "Status is required")
     private Withdrawal.WithdrawalStatus status;
+    
+    // Optional comments for the status update
+    private String comments;
 } 

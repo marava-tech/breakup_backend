@@ -144,4 +144,17 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     
     // Count stories by user ID
     long countByUserId(String userId);
+    
+    // Count all user stories (excluding FAILED and REJECTED)
+    @Query(value = "{'userId': ?0, 'status': {$nin: ['FAILED', 'REJECTED']}}", count = true)
+    long countByUserIdAndStatusNotIn(String userId);
+    
+    // Check if user has an active story with UPLOADED creation type
+    boolean existsByUserIdAndStatusAndCreationType(String userId, Story.StoryStatus status, Story.CreationType creationType);
+    
+    // Find stories by creation type and status ordered by creation date (for voice stories)
+    Page<Story> findByCreationTypeAndStatusOrderByCreatedAtDesc(Story.CreationType creationType, Story.StoryStatus status, Pageable pageable);
+    
+    // Find stories by creation type, status and language ordered by creation date (for voice stories with language filter)
+    Page<Story> findByCreationTypeAndStatusAndLanguageOrderByCreatedAtDesc(Story.CreationType creationType, Story.StoryStatus status, String language, Pageable pageable);
 } 

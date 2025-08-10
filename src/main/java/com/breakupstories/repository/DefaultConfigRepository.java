@@ -21,4 +21,8 @@ public interface DefaultConfigRepository extends MongoRepository<DefaultConfig, 
     // Paginated search methods
     Page<DefaultConfig> findByActive(Boolean active,Pageable pageable);
     Page<DefaultConfig> findByKeyContainingIgnoreCaseAndActive(String key, Boolean active,Pageable pageable);
+    
+    // App configuration methods
+    List<DefaultConfig> findByKeyStartingWithAndActiveTrue(String keyPrefix);
+    List<DefaultConfig> findByKeyInAndActiveTrue(List<String> keys);
 }

@@ -40,7 +40,7 @@ public class UserProfileResponse {
     private Long totalViews;
     private Long totalComments;
     
-    public static UserProfileResponse fromUser(User user, Long totalStories, Long totalLikes, Long totalViews, Long totalComments) {
+    public static UserProfileResponse fromUser(User user, Long totalStories, Long totalLikes, Long totalViews, Long totalComments, int totalCoins) {
         return UserProfileResponse.builder()
                 .id(user.getId())
                 .name(user.getName())
@@ -54,7 +54,7 @@ public class UserProfileResponse {
                 .updatedAt(user.getUpdatedAt())
                 .referralCode(user.getReferralCode())
                 .referredBy(user.getReferredBy())
-                .totalCoins(user.getCoinBalance())
+                .totalCoins(totalCoins)
                 .totalStories(totalStories)
                 .totalLikes(totalLikes)
                 .totalViews(totalViews)
@@ -63,7 +63,7 @@ public class UserProfileResponse {
     }
     
     public static UserProfileResponse fromUserWithReferralInfo(User user, Long totalStories, Long totalLikes, Long totalViews, Long totalComments, 
-                                                             String referredByUserName, List<CoinHistoryResponse> referralHistory) {
+                                                             String referredByUserName, List<CoinHistoryResponse> referralHistory, int totalCoins) {
         return UserProfileResponse.builder()
                 .id(user.getId())
                 .name(user.getName())
@@ -78,7 +78,7 @@ public class UserProfileResponse {
                 .referralCode(user.getReferralCode())
                 .referredBy(user.getReferredBy())
                 .referredByUserName(referredByUserName)
-                .totalCoins(user.getCoinBalance())
+                .totalCoins(totalCoins)
                 .totalStories(totalStories)
                 .totalLikes(totalLikes)
                 .totalViews(totalViews)

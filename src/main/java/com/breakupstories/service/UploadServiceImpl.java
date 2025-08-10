@@ -1,24 +1,24 @@
 package com.breakupstories.service;
 
 import com.breakupstories.exception.FileUploadException;
-import com.breakupstories.service.UploadService;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 import com.cloudinary.Cloudinary;
-import com.cloudinary.utils.ObjectUtils;
+
 import com.cloudinary.Transformation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
-import java.io.IOException;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+
 import jakarta.annotation.PreDestroy;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -186,7 +186,7 @@ public class UploadServiceImpl implements UploadService {
 
                 } else if (contentType.startsWith("audio/")) {
                     uploadOptions.put("resource_type", "video"); // Cloudinary uses 'video' for audio
-                    // Don't force MP3 format - let Cloudinary handle the original format
+                    uploadOptions.put("format", "mp3"); // Force MP3 format for consistency
                     uploadOptions.put("quality", "auto:low"); // Aggressive compression
 
                     // Simplified audio transformation
@@ -199,6 +199,24 @@ public class UploadServiceImpl implements UploadService {
                     uploadOptions.put("invalidate", true);
                     uploadOptions.put("overwrite", true);
 
+                } else if (contentType.equals("application/octet-stream") && isAudioFile(originalFilename)) {
+                    // Handle audio files with generic content type
+                    uploadOptions.put("resource_type", "video"); // Cloudinary uses 'video' for audio
+                    uploadOptions.put("format", "mp3"); // Force MP3 format for consistency
+                    uploadOptions.put("quality", "auto:low"); // Aggressive compression
+
+                    // Simplified audio transformation
+                    Transformation audioTransformation = new Transformation()
+                            .quality("auto:low");
+
+                    uploadOptions.put("transformation", audioTransformation);
+                    
+                    // Add better error handling for audio files
+                    uploadOptions.put("invalidate", true);
+                    uploadOptions.put("overwrite", true);
+                    
+                    log.info("Detected audio file with generic content type: {} -> treating as audio", originalFilename);
+
                 } else {
                     uploadOptions.put("resource_type", "raw");
                 }
@@ -208,16 +226,34 @@ public class UploadServiceImpl implements UploadService {
             if (originalFilename != null) {
                 // Split filename into base and extension
                 String baseName = originalFilename;
+                String fileExtension = "";
                 int lastDotIndex = originalFilename.lastIndexOf('.');
                 if (lastDotIndex > 0 && lastDotIndex < originalFilename.length() - 1) {
                     baseName = originalFilename.substring(0, lastDotIndex);
+                    fileExtension = originalFilename.substring(lastDotIndex); // Include the dot
                 }
                 // Clean up the base name by replacing invalid characters
                 baseName = baseName.replaceAll("[^a-zA-Z0-9.-]", "_");
-                // Generate UUID without extension (Cloudinary will add the appropriate extension)
+                // Generate UUID
                 String uuid = UUID.randomUUID().toString();
-                // Construct new filename without extension
-                String publicId = baseName + "-" + uuid;
+                
+                // Include extension in public_id for proper URL generation
+                String publicId;
+                if ((contentType != null && contentType.startsWith("audio/")) || 
+                    (contentType != null && contentType.equals("application/octet-stream") && isAudioFile(originalFilename))) {
+                    // For audio files, force .mp3 extension
+                    publicId = baseName + "-" + uuid + ".mp3";
+                } else if (contentType != null && contentType.startsWith("image/")) {
+                    // For image files, include the original extension or determine from content type
+                    if (fileExtension.isEmpty()) {
+                        // If no extension in filename, determine from content type
+                        fileExtension = getExtensionFromContentType(contentType);
+                    }
+                    publicId = baseName + "-" + uuid + fileExtension;
+                } else {
+                    // For other files, include extension if available
+                    publicId = baseName + "-" + uuid + fileExtension;
+                }
                 uploadOptions.put("public_id", publicId);
             }
 
@@ -264,6 +300,83 @@ public class UploadServiceImpl implements UploadService {
         } catch (Exception e) {
             log.error("Error uploading file: {}", file.getOriginalFilename(), e);
             throw new FileUploadException("Error uploading file: " + file.getOriginalFilename(), e);
+        }
+    }
+    
+    /**
+     * Check if a file has an audio extension
+     */
+    private boolean isAudioFile(String filename) {
+        if (filename == null) {
+            return false;
+        }
+        
+        String extension = filename.toLowerCase();
+        return extension.endsWith(".mp3") || 
+               extension.endsWith(".wav") || 
+               extension.endsWith(".m4a") || 
+               extension.endsWith(".aac") || 
+               extension.endsWith(".ogg") || 
+               extension.endsWith(".flac") ||
+               extension.endsWith(".wma") ||
+               extension.endsWith(".aiff");
+    }
+    
+    /**
+     * Get file extension from content type
+     */
+    private String getExtensionFromContentType(String contentType) {
+        if (contentType == null) {
+            return "";
+        }
+        
+        switch (contentType.toLowerCase()) {
+            // Image types
+            case "image/jpeg":
+            case "image/jpg":
+                return ".jpg";
+            case "image/png":
+                return ".png";
+            case "image/gif":
+                return ".gif";
+            case "image/webp":
+                return ".webp";
+            case "image/bmp":
+                return ".bmp";
+            case "image/tiff":
+                return ".tiff";
+            case "image/svg+xml":
+                return ".svg";
+            
+            // Audio types
+            case "audio/mpeg":
+            case "audio/mp3":
+                return ".mp3";
+            case "audio/wav":
+                return ".wav";
+            case "audio/ogg":
+                return ".ogg";
+            case "audio/aac":
+                return ".aac";
+            case "audio/m4a":
+                return ".m4a";
+            
+            // Video types
+            case "video/mp4":
+                return ".mp4";
+            case "video/webm":
+                return ".webm";
+            case "video/avi":
+                return ".avi";
+            
+            // Document types
+            case "application/pdf":
+                return ".pdf";
+            case "text/plain":
+                return ".txt";
+            
+            default:
+                return "";
         }
     }
 }

@@ -1,10 +1,10 @@
 package com.breakupstories.service;
 
 import com.breakupstories.model.Story;
-import com.breakupstories.model.StoryDataStore;
+
 import com.breakupstories.repository.StoryRepository;
-import com.breakupstories.repository.StoryDataStoreRepository;
-import com.breakupstories.service.RewardService;
+
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,7 +20,6 @@ import java.util.List;
 public class FirstStoryRewardService {
     
     private final StoryRepository storyRepository;
-    private final StoryDataStoreRepository storyDataStoreRepository;
     private final RewardService rewardService;
     private final DefaultConfigService defaultConfigService;
     

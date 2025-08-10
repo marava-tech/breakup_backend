@@ -31,6 +31,9 @@ public interface WithdrawalRepository extends MongoRepository<Withdrawal, String
     
     boolean existsByUserIdAndMoneyInRs(String userId, BigDecimal moneyInRs);
     
+    // Check if user has non-rejected withdrawal for specific amount
+    boolean existsByUserIdAndMoneyInRsAndStatusNot(String userId, BigDecimal moneyInRs, Withdrawal.WithdrawalStatus status);
+    
     // New methods for withdrawal statistics
     long countByCreatedAtBetween(LocalDateTime fromDate, LocalDateTime toDate);
     

@@ -52,4 +52,25 @@ public interface CoinHistoryRepository extends MongoRepository<CoinHistory, Stri
      */
     @Query(value = "{'userId': ?0}", fields = "{'count': 1}")
     List<CoinHistory> findCountsByUserId(String userId);
+    
+    /**
+     * Find valid (non-invalidated or refunded) coin history entries for a user
+     * Used for calculating actual coin balance
+     * 
+     * Includes entries where:
+     * - invalidate is false, null, or missing (backward compatibility with old records)
+     * - OR refund is true (even if invalidated)
+     */
+    @Query("{'userId': ?0, '$or': [{'invalidate': {$ne: true}}, {'refund': true}]}")
+    List<CoinHistory> findValidCoinHistoryByUserId(String userId);
+    
+    /**
+     * Find all invalidated coin history entries for a user
+     */
+    List<CoinHistory> findByUserIdAndInvalidateTrue(String userId);
+    
+    /**
+     * Find all refunded coin history entries for a user
+     */
+    List<CoinHistory> findByUserIdAndRefundTrue(String userId);
 } 

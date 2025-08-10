@@ -4,6 +4,10 @@
 # Creates Linux (linux-amd64)
 # Usage: ./build-and-push.sh [version]
 
+# Simple build and push script
+#echo "Building JAR with Maven..."
+#mvn clean package -DskipTests
+
 set -e  # Exit on any error
 
 # Configuration

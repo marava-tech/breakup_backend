@@ -1,6 +1,6 @@
 package com.breakupstories.controller;
 
-import com.breakupstories.dto.BookmarkRequest;
+
 import com.breakupstories.dto.BookmarkResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.StoryResponse;
@@ -14,7 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Lazy;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;

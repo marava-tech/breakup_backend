@@ -20,4 +20,7 @@ public class OtpVerificationRequest {
     
     @NotBlank(message = "OTP is required")
     private String otp;
+    
+    // Optional device ID for login device mapping
+    private String deviceId;
 } 

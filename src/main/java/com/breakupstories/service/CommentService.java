@@ -14,7 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,7 +27,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     @Lazy
     private final UserService userService;
-    private final RetryableAIService retryableAIService;
+
     
     public CommentResponse createComment(String userId, CommentRequest request) {
         log.info("User {} creating comment on story {}", userId, request.getStoryId());
@@ -179,31 +179,11 @@ public class CommentService {
             throw new RuntimeException("You can only update your own comments");
         }
         
-        // Perform abuse detection on the updated comment text
-        boolean isAbusive = false;
-        String category = null;
-        String explanation = null;
-        Double confidence = null;
-        
-        try {
-            log.info("Performing abuse detection on updated comment text");
-            var abuseDetectionResponse = retryableAIService.detectAbuse(request.getText(), "en");
-            isAbusive = abuseDetectionResponse.getIs_abusive();
-            category = abuseDetectionResponse.getCategory();
-            explanation = abuseDetectionResponse.getExplanation();
-            confidence = abuseDetectionResponse.getConfidence();
-            
-            log.info("Abuse detection completed for updated comment - Is Abusive: {}, Category: {}, Confidence: {}", 
-                    isAbusive, category, abuseDetectionResponse.getConfidence());
-        } catch (Exception e) {
-            log.error("Error performing abuse detection on updated comment: {}", e.getMessage(), e);
-            // Continue with comment update even if abuse detection fails
             // Keep existing abuse detection values
-            isAbusive = comment.isAbusive();
-            category = comment.getCategory();
-            explanation = comment.getExplanation();
-            confidence = comment.getConfidence();
-        }
+        boolean isAbusive = comment.isAbusive();
+        String category = comment.getCategory();
+        String explanation = comment.getExplanation();
+        Double confidence = comment.getConfidence();
         
         comment.setText(request.getText());
         comment.setAbusive(isAbusive);

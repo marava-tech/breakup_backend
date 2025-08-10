@@ -7,14 +7,24 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-/**
- * Response DTO for paragraph rewrite service
- */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ParagraphRewriteResponse {
-    private List<ParagraphContent> contents;
-    private String language;
+    
+    private List<Paragraph> paragraphs;
+    private String status;
+    private String error;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Paragraph {
+        private String originalText;
+        private String rewrittenText;
+        private Integer paragraphNumber;
+        private String style;
+    }
 } 

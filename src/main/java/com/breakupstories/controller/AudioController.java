@@ -1,16 +1,16 @@
 package com.breakupstories.controller;
 
-import com.breakupstories.dto.RecStartAudioResponse;
+
 import com.breakupstories.dto.QuoteResponse;
-import com.breakupstories.model.User;
+
 import com.breakupstories.service.DefaultConfigService;
-import com.breakupstories.service.UserService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;

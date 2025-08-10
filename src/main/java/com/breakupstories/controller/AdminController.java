@@ -6,7 +6,7 @@ import com.breakupstories.enums.Role;
 import com.breakupstories.model.*;
 import com.breakupstories.repository.*;
 import com.breakupstories.service.*;
-import org.springframework.security.core.userdetails.UserDetails;
+
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.Objects;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -38,6 +40,7 @@ public class AdminController {
     private final UserService userService;
     private final AuditService auditService;
     private final WithdrawalRepository withdrawalRepository;
+    private final RewardService rewardService;
     
     // ==================== STORY MANAGEMENT ====================
     
@@ -290,7 +293,7 @@ public class AdminController {
             // Stories by language
             List<Map<String, Object>> languageStats = storyRepository.findAll().stream()
                     .collect(java.util.stream.Collectors.groupingBy(
-                            Story::getLanguage,
+                            story -> story.getLanguage() != null ? story.getLanguage() : "Unknown",
                             java.util.stream.Collectors.counting()))
                     .entrySet().stream()
                     .map(entry -> {
@@ -311,13 +314,16 @@ public class AdminController {
             
         } catch (Exception e) {
             log.error("Error fetching story statistics: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            Map<String, Object> errorStats = new HashMap<>();
+            errorStats.put("error", "Unable to calculate story statistics: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorStats);
         }
     }
     
     // ==================== USER MANAGEMENT ====================
     
     @GetMapping("/users")
+    @Operation(summary = "Get users with filters", description = "Retrieve paginated list of users with optional filters including device ID and referredBy")
     public ResponseEntity<PagedResponse<UserResponse>> getUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -326,13 +332,12 @@ public class AdminController {
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String gender,
             @RequestParam(required = false) String userId,
-            @RequestParam(required = false) Integer minCoins,
-            @RequestParam(required = false) Integer maxCoins,
+            @RequestParam(required = false) String deviceId,
+            @RequestParam(required = false) String referredBy,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortOrder) {
         try {
             Pageable pageable = createPageable(page, size, sortBy, sortOrder);
-            Page<User> userPage;
             
             // Parse role if provided
             Role roleFilter = null;
@@ -356,119 +361,11 @@ public class AdminController {
                 }
             }
             
-            // Apply filters based on provided parameters
-            if (userId != null) {
-                // If userId is provided, use it as the primary filter
-                if (username != null && email != null && roleFilter != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndRoleAndGenderAndIdAndCoinBalanceBetween(username, roleFilter, genderFilter, userId, minCoins, maxCoins, pageable);
-                } else if (email != null && roleFilter != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndRoleAndGenderAndIdAndCoinBalanceBetween(email, roleFilter, genderFilter, userId, minCoins, maxCoins, pageable);
-                } else if (username != null && roleFilter != null && genderFilter != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndRoleAndGenderAndId(username, roleFilter, genderFilter, userId, pageable);
-                } else if (email != null && roleFilter != null && genderFilter != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndRoleAndGenderAndId(email, roleFilter, genderFilter, userId, pageable);
-                } else if (username != null && roleFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndRoleAndIdAndCoinBalanceBetween(username, roleFilter, userId, minCoins, maxCoins, pageable);
-                } else if (email != null && roleFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndRoleAndIdAndCoinBalanceBetween(email, roleFilter, userId, minCoins, maxCoins, pageable);
-                } else if (username != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndGenderAndIdAndCoinBalanceBetween(username, genderFilter, userId, minCoins, maxCoins, pageable);
-                } else if (email != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndGenderAndIdAndCoinBalanceBetween(email, genderFilter, userId, minCoins, maxCoins, pageable);
-                } else if (roleFilter != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByRoleAndGenderAndIdAndCoinBalanceBetween(roleFilter, genderFilter, userId, minCoins, maxCoins, pageable);
-                } else if (username != null && roleFilter != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndRoleAndId(username, roleFilter, userId, pageable);
-                } else if (email != null && roleFilter != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndRoleAndId(email, roleFilter, userId, pageable);
-                } else if (username != null && genderFilter != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndGenderAndId(username, genderFilter, userId, pageable);
-                } else if (email != null && genderFilter != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndGenderAndId(email, genderFilter, userId, pageable);
-                } else if (username != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndIdAndCoinBalanceBetween(username, userId, minCoins, maxCoins, pageable);
-                } else if (email != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndIdAndCoinBalanceBetween(email, userId, minCoins, maxCoins, pageable);
-                } else if (roleFilter != null && genderFilter != null) {
-                    userPage = userRepository.findByRoleAndGenderAndId(roleFilter, genderFilter, userId, pageable);
-                } else if (roleFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByRoleAndIdAndCoinBalanceBetween(roleFilter, userId, minCoins, maxCoins, pageable);
-                } else if (genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByGenderAndIdAndCoinBalanceBetween(genderFilter, userId, minCoins, maxCoins, pageable);
-                } else if (username != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndId(username, userId, pageable);
-                } else if (email != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndId(email, userId, pageable);
-                } else if (roleFilter != null) {
-                    userPage = userRepository.findByRoleAndId(roleFilter, userId, pageable);
-                } else if (genderFilter != null) {
-                    userPage = userRepository.findByGenderAndId(genderFilter, userId, pageable);
-                } else if (minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByIdAndCoinBalanceBetween(userId, minCoins, maxCoins, pageable);
-                } else {
-                    // Only userId filter
-                    userPage = userRepository.findById(userId, pageable);
-                }
-            } else {
-                // No userId filter, use existing logic
-                if (username != null && email != null && roleFilter != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndRoleAndGenderAndCoinBalanceBetween(username, roleFilter, genderFilter, minCoins, maxCoins, pageable);
-                } else if (email != null && roleFilter != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndRoleAndGenderAndCoinBalanceBetween(email, roleFilter, genderFilter, minCoins, maxCoins, pageable);
-                } else if (username != null && roleFilter != null && genderFilter != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndRoleAndGender(username, roleFilter, genderFilter, pageable);
-                } else if (email != null && roleFilter != null && genderFilter != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndRoleAndGender(email, roleFilter, genderFilter, pageable);
-                } else if (username != null && roleFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndRoleAndCoinBalanceBetween(username, roleFilter, minCoins, maxCoins, pageable);
-                } else if (email != null && roleFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndRoleAndCoinBalanceBetween(email, roleFilter, minCoins, maxCoins, pageable);
-                } else if (username != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndGenderAndCoinBalanceBetween(username, genderFilter, minCoins, maxCoins, pageable);
-                } else if (email != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndGenderAndCoinBalanceBetween(email, genderFilter, minCoins, maxCoins, pageable);
-                } else if (roleFilter != null && genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByRoleAndGenderAndCoinBalanceBetween(roleFilter, genderFilter, minCoins, maxCoins, pageable);
-                } else if (username != null && roleFilter != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndRole(username, roleFilter, pageable);
-                } else if (email != null && roleFilter != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndRole(email, roleFilter, pageable);
-                } else if (username != null && genderFilter != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndGender(username, genderFilter, pageable);
-                } else if (email != null && genderFilter != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndGender(email, genderFilter, pageable);
-                } else if (username != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCaseAndCoinBalanceBetween(username, minCoins, maxCoins, pageable);
-                } else if (email != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCaseAndCoinBalanceBetween(email, minCoins, maxCoins, pageable);
-                } else if (roleFilter != null && genderFilter != null) {
-                    userPage = userRepository.findByRoleAndGender(roleFilter, genderFilter, pageable);
-                } else if (roleFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByRoleAndCoinBalanceBetween(roleFilter, minCoins, maxCoins, pageable);
-                } else if (genderFilter != null && minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByGenderAndCoinBalanceBetween(genderFilter, minCoins, maxCoins, pageable);
-                } else if (username != null) {
-                    userPage = userRepository.findByNameContainingIgnoreCase(username, pageable);
-                } else if (email != null) {
-                    userPage = userRepository.findByEmailContainingIgnoreCase(email, pageable);
-                } else if (roleFilter != null) {
-                    userPage = userRepository.findByRole(roleFilter, pageable);
-                } else if (genderFilter != null) {
-                    userPage = userRepository.findByGender(genderFilter, pageable);
-                } else if (minCoins != null && maxCoins != null) {
-                    userPage = userRepository.findByCoinBalanceBetween(minCoins, maxCoins, pageable);
-                } else if (minCoins != null) {
-                    userPage = userRepository.findByCoinBalanceGreaterThanEqual(minCoins, pageable);
-                } else if (maxCoins != null) {
-                    userPage = userRepository.findByCoinBalanceLessThanEqual(maxCoins, pageable);
-                } else {
-                    // No filters applied, return all users
-                    userPage = userRepository.findAll(pageable);
-                }
-            }
+            // Use the custom filtering method that supports device ID and referredBy
+            Page<User> userPage = filterUsers(username, email, roleFilter, genderFilter, userId, deviceId, referredBy, pageable);
             
             List<UserResponse> users = userPage.getContent().stream()
-                    .map(UserResponse::fromUser)
+                    .map(user -> UserResponse.fromUserWithReferrerName(user, userRepository))
                     .collect(java.util.stream.Collectors.toList());
             
             return ResponseEntity.ok(PagedResponse.of(users, page, size, userPage.getTotalElements()));
@@ -500,13 +397,13 @@ public class AdminController {
             // Coin statistics
             List<User> allUsers = userRepository.findAll();
             double avgCoins = allUsers.stream()
-                    .mapToInt(User::getCoinBalance)
+                    .mapToInt(user -> rewardService.getValidTotalCoins(user.getId()))
                     .average()
                     .orElse(0.0);
             stats.put("averageCoins", avgCoins);
             
             int maxCoins = allUsers.stream()
-                    .mapToInt(User::getCoinBalance)
+                    .mapToInt(user -> rewardService.getValidTotalCoins(user.getId()))
                     .max()
                     .orElse(0);
             stats.put("maxCoins", maxCoins);
@@ -522,6 +419,169 @@ public class AdminController {
             log.error("Error fetching user statistics: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+    
+    @GetMapping("/users/device/{deviceId}")
+    @Operation(summary = "Get users by device ID", description = "Get all users associated with a specific device ID")
+    public ResponseEntity<Map<String, Object>> getUsersByDeviceId(@PathVariable String deviceId) {
+        try {
+            List<User> users = userRepository.findAllByDeviceId(deviceId);
+            List<UserResponse> userResponses = users.stream()
+                    .map(UserResponse::fromUser)
+                    .collect(java.util.stream.Collectors.toList());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("deviceId", deviceId);
+            response.put("userCount", users.size());
+            response.put("users", userResponses);
+            
+            log.info("Retrieved {} users for device ID: {}", users.size(), deviceId);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error fetching users by device ID {}: {}", deviceId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
+     * Custom filtering method that supports all filter combinations including device ID and referredBy
+     */
+    private Page<User> filterUsers(String username, String email, Role roleFilter, GENDER genderFilter, 
+                                   String userId, String deviceId, String referredBy, Pageable pageable) {
+        
+        // If only deviceId is provided, use the repository method
+        if (deviceId != null && username == null && email == null && roleFilter == null && 
+            genderFilter == null && userId == null && referredBy == null) {
+            List<User> deviceUsers = userRepository.findAllByDeviceId(deviceId);
+            return createPageFromList(deviceUsers, pageable);
+        }
+        
+        // If only referredBy is provided, use the repository method
+        if (referredBy != null && username == null && email == null && roleFilter == null && 
+            genderFilter == null && userId == null && deviceId == null) {
+            List<User> referredUsers = userRepository.findByReferredBy(referredBy);
+            return createPageFromList(referredUsers, pageable);
+        }
+        
+        // For complex filtering with device ID, we need to use a custom approach
+        // Since adding all combinations to repository would be excessive, use programmatic filtering
+        
+        Page<User> basePage;
+        
+        // Start with the most specific filters first
+        if (userId != null) {
+            // If userId is provided, get that specific user
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (userOpt.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            User user = userOpt.get();
+            
+            // Check if the user matches all other filters
+            if (matchesFilters(user, username, email, roleFilter, genderFilter, deviceId, referredBy)) {
+                return createPageFromList(List.of(user), pageable);
+            } else {
+                return Page.empty(pageable);
+            }
+        }
+        
+        // If no userId but deviceId is specified, start with device users
+        if (deviceId != null) {
+            List<User> deviceUsers = userRepository.findAllByDeviceId(deviceId);
+            List<User> filteredUsers = deviceUsers.stream()
+                    .filter(user -> matchesFilters(user, username, email, roleFilter, genderFilter, null, referredBy))
+                    .collect(java.util.stream.Collectors.toList());
+            return createPageFromList(filteredUsers, pageable);
+        }
+        
+        // If no userId but referredBy is specified, start with referred users
+        if (referredBy != null) {
+            List<User> referredUsers = userRepository.findByReferredBy(referredBy);
+            List<User> filteredUsers = referredUsers.stream()
+                    .filter(user -> matchesFilters(user, username, email, roleFilter, genderFilter, deviceId, null))
+                    .collect(java.util.stream.Collectors.toList());
+            return createPageFromList(filteredUsers, pageable);
+        }
+        
+        // Fall back to existing repository methods for other combinations
+        if (username != null && roleFilter != null && genderFilter != null) {
+            basePage = userRepository.findByNameContainingIgnoreCaseAndRoleAndGender(username, roleFilter, genderFilter, pageable);
+        } else if (email != null && roleFilter != null && genderFilter != null) {
+            basePage = userRepository.findByEmailContainingIgnoreCaseAndRoleAndGender(email, roleFilter, genderFilter, pageable);
+        } else if (username != null && roleFilter != null) {
+            basePage = userRepository.findByNameContainingIgnoreCaseAndRole(username, roleFilter, pageable);
+        } else if (email != null && roleFilter != null) {
+            basePage = userRepository.findByEmailContainingIgnoreCaseAndRole(email, roleFilter, pageable);
+        } else if (username != null && genderFilter != null) {
+            basePage = userRepository.findByNameContainingIgnoreCaseAndGender(username, genderFilter, pageable);
+        } else if (email != null && genderFilter != null) {
+            basePage = userRepository.findByEmailContainingIgnoreCaseAndGender(email, genderFilter, pageable);
+        } else if (roleFilter != null && genderFilter != null) {
+            basePage = userRepository.findByRoleAndGender(roleFilter, genderFilter, pageable);
+        } else if (username != null) {
+            basePage = userRepository.findByNameContainingIgnoreCase(username, pageable);
+        } else if (email != null) {
+            basePage = userRepository.findByEmailContainingIgnoreCase(email, pageable);
+        } else if (roleFilter != null) {
+            basePage = userRepository.findByRole(roleFilter, pageable);
+        } else if (genderFilter != null) {
+            basePage = userRepository.findByGender(genderFilter, pageable);
+        } else {
+            basePage = userRepository.findAll(pageable);
+        }
+        
+        return basePage;
+    }
+    
+    /**
+     * Check if a user matches the given filters
+     */
+    private boolean matchesFilters(User user, String username, String email, Role roleFilter, 
+                                   GENDER genderFilter, String deviceId, String referredBy) {
+        if (username != null && (user.getName() == null || 
+                !user.getName().toLowerCase().contains(username.toLowerCase()))) {
+            return false;
+        }
+        
+        if (email != null && (user.getEmail() == null || 
+                !user.getEmail().toLowerCase().contains(email.toLowerCase()))) {
+            return false;
+        }
+        
+        if (roleFilter != null && !roleFilter.equals(user.getRole())) {
+            return false;
+        }
+        
+        if (genderFilter != null && !genderFilter.equals(user.getGender())) {
+            return false;
+        }
+        
+        if (deviceId != null && !deviceId.equals(user.getDeviceId())) {
+            return false;
+        }
+        
+        if (referredBy != null && !referredBy.equals(user.getReferredBy())) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Create a Page object from a list of users
+     */
+    private Page<User> createPageFromList(List<User> users, Pageable pageable) {
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), users.size());
+        
+        if (start >= users.size()) {
+            return new org.springframework.data.domain.PageImpl<>(
+                    java.util.Collections.emptyList(), pageable, users.size());
+        }
+        
+        List<User> pageContent = users.subList(start, end);
+        return new org.springframework.data.domain.PageImpl<>(pageContent, pageable, users.size());
     }
     
     // ==================== COMMENT MANAGEMENT ====================
@@ -880,7 +940,7 @@ public class AdminController {
             // Stories by language in date range
             List<Map<String, Object>> languageStats = storyRepository.findByCreatedAtBetween(fromDate, toDate).stream()
                     .collect(java.util.stream.Collectors.groupingBy(
-                            Story::getLanguage,
+                            story -> story.getLanguage() != null ? story.getLanguage() : "Unknown",
                             java.util.stream.Collectors.counting()))
                     .entrySet().stream()
                     .map(entry -> {
@@ -894,7 +954,10 @@ public class AdminController {
             
             // Average daily story creation
             long durationDays = java.time.Duration.between(fromDate, toDate).toDays();
-            double avgDailyStories = durationDays > 0 ? (double) totalStoriesInRange / durationDays : 0;
+            if (durationDays <= 0) {
+                durationDays = 1; // Avoid division by zero
+            }
+            double avgDailyStories = (double) totalStoriesInRange / durationDays;
             stats.put("avgDailyStories", Math.round(avgDailyStories * 100.0) / 100.0);
             
             // Success rate
@@ -903,8 +966,8 @@ public class AdminController {
             stats.put("successRate", Math.round(successRate * 100.0) / 100.0);
             
         } catch (Exception e) {
-            log.warn("Error calculating story creation stats: {}", e.getMessage());
-            stats.put("error", "Unable to calculate story creation statistics");
+            log.error("Error calculating story creation stats: {}", e.getMessage(), e);
+            stats.put("error", "Unable to calculate story creation statistics: " + e.getMessage());
         }
         
         return stats;

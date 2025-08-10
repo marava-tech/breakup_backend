@@ -4,8 +4,8 @@ import com.breakupstories.dto.LikeResponse;
 import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.RequestIdResponse;
 import com.breakupstories.dto.StoryResponse;
-import com.breakupstories.dto.ConsolingMessageResponse;
 import com.breakupstories.dto.WrittenStoryRequest;
+import com.breakupstories.dto.WithdrawalEligibilityResponse;
 import com.breakupstories.enums.StorySearchType;
 import com.breakupstories.model.Story;
 import com.breakupstories.model.User;
@@ -14,8 +14,7 @@ import com.breakupstories.service.AuditService;
 import com.breakupstories.service.ClientInfoService;
 import com.breakupstories.service.StoryService;
 import com.breakupstories.service.UserService;
-import com.breakupstories.service.AIService;
-import com.breakupstories.service.StoryDataStoreService;
+
 import com.breakupstories.util.RequestContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,7 +32,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 
-import com.breakupstories.model.StoryDataStore;
 
 @RestController
 @RequestMapping("/api/stories")
@@ -47,8 +45,6 @@ public class StoryController {
     private final AuditService auditService;
     private final ClientInfoService clientInfoService;
     private final StoryRepository storyRepository;
-    private final AIService aiService;
-    private final StoryDataStoreService storyDataStoreService;
     
     @PostMapping
     @Operation(summary = "Create a new story", description = "Upload a new story with content, tags, and metadata")
@@ -212,6 +208,13 @@ public class StoryController {
                         response = storyService.getLatestStories(userId, page, size);
                     }
                 }
+                case VOICE -> {
+                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                        response = storyService.getVoiceStoriesByLanguage(filterLanguage, userId, page, size);
+                    } else {
+                        response = storyService.getVoiceStories(userId, page, size);
+                    }
+                }
                 case LANGUAGE -> {
                     if (language != null && !language.trim().isEmpty()) {
                         response = storyService.getStoriesByLanguage(language, userId, page, size);
@@ -249,6 +252,13 @@ public class StoryController {
                         response = storyService.getLatestStoriesByLanguage(language, page, size);
                     } else {
                         response = storyService.getLatestStories(page, size);
+                    }
+                }
+                case VOICE -> {
+                    if (language != null && !language.trim().isEmpty()) {
+                        response = storyService.getVoiceStoriesByLanguage(language, page, size);
+                    } else {
+                        response = storyService.getVoiceStories(page, size);
                     }
                 }
                 case LANGUAGE -> {
@@ -407,7 +417,7 @@ public class StoryController {
     }
 
     @GetMapping("/my-stories")
-    @Operation(summary = "Get my stories", description = "Get all stories uploaded, written, or recorded by the authenticated user without any filtering")
+    @Operation(summary = "Get my stories", description = "Get all stories uploaded, written, or recorded by the authenticated user with status from Story entity only")
     public ResponseEntity<PagedResponse<StoryResponse>> getMyStories(
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
@@ -421,7 +431,7 @@ public class StoryController {
         User user = userService.getUserEntityByEmail(email);
         String userId = user.getId();
         
-        PagedResponse<StoryResponse> response = storyService.getStories(userId, page, size);
+        PagedResponse<StoryResponse> response = storyService.getMyStories(userId, page, size);
         return ResponseEntity.ok(response);
     }
     
@@ -463,70 +473,7 @@ public class StoryController {
         }
     }
 
-    @GetMapping("/{storyId}/consoling-message")
-    @Operation(summary = "Generate consoling message for story", description = "Generate a consoling message for a story using story ID and console_by parameter")
-    public ResponseEntity<ConsolingMessageResponse> generateConsolingMessageForStory(
-            @PathVariable String storyId,
-            @RequestParam String consoleBy,
-            Authentication authentication) {
-        
-        log.info("Generating consoling message for story: {} with consoleBy: {}", storyId, consoleBy);
-        
-        try {
-            // Get current user from authentication
-            String email = authentication.getName();
-            User currentUser = userService.getUserEntityByEmail(email);
-            
-            // Get story data store to extract transcription and language
-            StoryDataStore dataStore = storyDataStoreService.getDataStoreByStoryId(storyId)
-                    .orElseThrow(() -> new RuntimeException("Story data store not found for story ID: " + storyId));
-            
-            // Extract transcription from StoryDataStore
-            String story = null;
-            if (dataStore.getTranscriptionResponse() != null && dataStore.getTranscriptionResponse().getTranscript() != null) {
-                story = dataStore.getTranscriptionResponse().getTranscript();
-            } else if (dataStore.getStoryRewriteResponse() != null && dataStore.getStoryRewriteResponse().getRewrittenStory() != null) {
-                story = dataStore.getStoryRewriteResponse().getRewrittenStory();
-            } else {
-                throw new RuntimeException("No story content available for story ID: " + storyId);
-            }
-            
-            // Get language from StoryDataStore
-            String language = dataStore.getLanguage();
-            if (language == null || language.trim().isEmpty()) {
-                language = "en"; // Default to English if not available
-            }
-            
-            // Get user gender and age
-            String gender = currentUser.getGender() != null ? currentUser.getGender().toString().toLowerCase() : "unknown";
-            Integer age = currentUser.getAge();
-            if (age == null) {
-                age = 25; // Default age if not available
-            }
-            
-            log.info("Extracted data for consoling message - Language: {}, Gender: {}, Age: {}, ConsoleBy: {}", 
-                    language, gender, age, consoleBy);
-            
-            // Generate consoling message using AI service
-            ConsolingMessageResponse response = aiService.generateConsolingMessage(story, language, gender, age, consoleBy);
-            
-            log.info("Consoling message generated successfully for story: {}", storyId);
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            log.error("Error generating consoling message for story {}: {}", storyId, e.getMessage(), e);
-            
-            ConsolingMessageResponse errorResponse = ConsolingMessageResponse.builder()
-                    .success(false)
-                    .consolingMessage(null)
-                    .language("en")
-                    .consoleBy(consoleBy)
-                    .error("Failed to generate consoling message: " + e.getMessage())
-                    .build();
-            
-            return ResponseEntity.status(500).body(errorResponse);
-        }
-    }
+
 
     @GetMapping("/test-story-images/{storyId}")
     public ResponseEntity<Map<String, Object>> testStoryImages(@PathVariable String storyId) {
@@ -548,5 +495,20 @@ public class StoryController {
             
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
+    }
+    
+    @GetMapping("/withdrawal-eligibility")
+    @Operation(summary = "Check withdrawal eligibility", description = "Check if user has uploaded an active story and is eligible for coin withdrawal")
+    public ResponseEntity<WithdrawalEligibilityResponse> checkWithdrawalEligibility(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("login required");
+        }
+        
+        String email = authentication.getName();
+        User user = userService.getUserEntityByEmail(email);
+        String userId = user.getId();
+        
+        WithdrawalEligibilityResponse response = storyService.checkWithdrawalEligibility(userId);
+        return ResponseEntity.ok(response);
     }
 } 

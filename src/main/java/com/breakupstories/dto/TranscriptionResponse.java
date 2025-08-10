@@ -5,16 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * DTO for transcription responses
- */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class TranscriptionResponse {
     
-    private String transcript;
+    private String transcription;
     private String language;
     private Double confidence;
+    private String status;
+    private String error;
 } 
