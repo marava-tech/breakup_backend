@@ -340,6 +340,32 @@ public class RewardService {
         String userId = coinHistory.getUserId();
         log.info("Invalidated coin history {} for user {} with reason: {} (refund: {})", 
                 coinHistoryId, userId, invalidationReason, refund);
+        
+        // If refund is true, add the coins back to the user's balance
+        if (refund != null && refund) {
+            // Create a refund entry with the opposite coin count to reverse the effect
+            // If original was +100, refund should be +100 (same)
+            // If original was -100 (withdrawal), refund should be +100 (opposite)
+            String refundReason = "refund_" + coinHistory.getReason();
+            
+            // Calculate the refund amount: multiply by -1 to reverse the effect
+            int refundAmount = -coinHistory.getCount();
+            
+            CoinHistory refundEntry = CoinHistory.builder()
+                    .userId(userId)
+                    .count(refundAmount) // Opposite count to reverse the original entry
+                    .reason(refundReason)
+                    .relatedEntityId(coinHistoryId) // Link to the invalidated entry
+                    .relatedEntityType(CoinHistoryEntityType.SYSTEM)
+                    .invalidate(false)
+                    .refund(false)
+                    .build();
+            
+            coinHistoryRepository.save(refundEntry);
+            
+            log.info("Added refund entry: {} coins for user {} with reason: {} (refunded from: {}, original: {})", 
+                    refundAmount, userId, refundReason, coinHistoryId, coinHistory.getCount());
+        }
     }
     
     /**

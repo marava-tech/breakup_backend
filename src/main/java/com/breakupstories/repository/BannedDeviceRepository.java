@@ -61,7 +61,7 @@ public interface BannedDeviceRepository extends MongoRepository<BannedDevice, St
         "{ $or: [ " +
         "  { 'deviceId': { $regex: ?0, $options: 'i' } }, " +
         "  { 'reason': { $regex: ?0, $options: 'i' } }, " +
-        "  { 'emails': { $elemMatch: { $regex: ?0, $options: 'i' } } } " +
+        "  { 'emails': { $regex: ?0, $options: 'i' } } " +
         "] }"
     )
     Page<BannedDevice> findByDeviceIdOrReasonOrEmailsContainingIgnoreCase(String searchTerm, Pageable pageable);

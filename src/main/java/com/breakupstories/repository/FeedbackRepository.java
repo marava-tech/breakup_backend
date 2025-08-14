@@ -8,6 +8,7 @@ import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Repository
 public interface FeedbackRepository extends MongoRepository<Feedback, String> {
@@ -56,4 +57,7 @@ public interface FeedbackRepository extends MongoRepository<Feedback, String> {
     long countByStatus(Feedback.FeedbackStatus status);
     
     long countByCreatedAtAfter(LocalDateTime date);
+    
+    // Date range methods for admin statistics
+    List<Feedback> findByCreatedAtBetween(LocalDateTime fromDate, LocalDateTime toDate);
 } 

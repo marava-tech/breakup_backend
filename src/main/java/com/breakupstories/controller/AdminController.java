@@ -36,6 +36,7 @@ public class AdminController {
     private final UserRepository userRepository;
     private final CommentRepository commentRepository;
     private final LikeRepository likeRepository;
+    private final FeedbackRepository feedbackRepository;
     private final StoryService storyService;
     private final UserService userService;
     private final AuditService auditService;
@@ -788,7 +789,298 @@ public class AdminController {
         }
     }
     
-
+    @GetMapping("/feedback/statistics")
+    @Operation(summary = "Get feedback statistics", description = "Retrieve comprehensive feedback statistics for admin dashboard")
+    public ResponseEntity<Map<String, Object>> getFeedbackStatistics() {
+        try {
+            Map<String, Object> stats = new HashMap<>();
+            
+            // Total feedback
+            long totalFeedback = feedbackRepository.count();
+            stats.put("totalFeedback", totalFeedback);
+            
+            // Feedback by status
+            stats.put("pendingFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.PENDING));
+            stats.put("inReviewFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.IN_REVIEW));
+            stats.put("resolvedFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.RESOLVED));
+            stats.put("valuedFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.VALUED));
+            stats.put("closedFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.CLOSED));
+            stats.put("rejectedFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.REJECTED));
+            
+            // Feedback by type
+            List<Map<String, Object>> typeStats = feedbackRepository.findAll().stream()
+                    .collect(java.util.stream.Collectors.groupingBy(
+                            feedback -> feedback.getType() != null ? feedback.getType() : Feedback.FeedbackType.GENERAL,
+                            java.util.stream.Collectors.counting()))
+                    .entrySet().stream()
+                    .map(entry -> {
+                        Map<String, Object> typeStat = new HashMap<>();
+                        typeStat.put("type", entry.getKey().name());
+                        typeStat.put("count", entry.getValue());
+                        return typeStat;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            stats.put("typeStats", typeStats);
+            
+            // Story-specific vs general feedback
+            long storySpecificFeedback = feedbackRepository.findAll().stream()
+                    .filter(feedback -> feedback.getStoryId() != null && !feedback.getStoryId().trim().isEmpty())
+                    .count();
+            long generalFeedback = totalFeedback - storySpecificFeedback;
+            stats.put("storySpecificFeedback", storySpecificFeedback);
+            stats.put("generalFeedback", generalFeedback);
+            
+            // Feedback with admin responses
+            long feedbackWithResponses = feedbackRepository.findAll().stream()
+                    .filter(feedback -> feedback.getAdminResponse() != null && !feedback.getAdminResponse().trim().isEmpty())
+                    .count();
+            stats.put("feedbackWithResponses", feedbackWithResponses);
+            stats.put("feedbackWithoutResponses", totalFeedback - feedbackWithResponses);
+            
+            // Response rate
+            double responseRate = totalFeedback > 0 ? (double) feedbackWithResponses / totalFeedback * 100 : 0;
+            stats.put("responseRate", Math.round(responseRate * 100.0) / 100.0);
+            
+            // Resolution rate
+            long resolvedFeedback = feedbackRepository.countByStatus(Feedback.FeedbackStatus.RESOLVED);
+            long valuedFeedback = feedbackRepository.countByStatus(Feedback.FeedbackStatus.VALUED);
+            double resolutionRate = totalFeedback > 0 ? 
+                ((double) (resolvedFeedback + valuedFeedback) / totalFeedback) * 100 : 0;
+            stats.put("resolutionRate", Math.round(resolutionRate * 100.0) / 100.0);
+            
+            // Recent feedback (last 7 days)
+            LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
+            long recentFeedback = feedbackRepository.countByCreatedAtAfter(weekAgo);
+            stats.put("recentFeedback", recentFeedback);
+            
+            return ResponseEntity.ok(stats);
+            
+        } catch (Exception e) {
+            log.error("Error fetching feedback statistics: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    // ==================== FEEDBACK MANAGEMENT ====================
+    
+    @GetMapping("/feedback")
+    @Operation(summary = "Get feedback with filters", description = "Retrieve paginated list of feedback with optional filters")
+    public ResponseEntity<PagedResponse<Map<String, Object>>> getFeedback(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String feedbackId,
+            @RequestParam(required = false) String userId,
+            @RequestParam(required = false) String storyId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        
+        try {
+            Pageable pageable = createPageable(page, size, sortBy, sortOrder);
+            Page<Feedback> feedbackPage;
+            
+            // Parse type if provided
+            Feedback.FeedbackType typeFilter = null;
+            if (type != null && !type.trim().isEmpty()) {
+                try {
+                    typeFilter = Feedback.FeedbackType.valueOf(type.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid type parameter: {}", type);
+                    return ResponseEntity.badRequest().build();
+                }
+            }
+            
+            // Parse status if provided
+            Feedback.FeedbackStatus statusFilter = null;
+            if (status != null && !status.trim().isEmpty()) {
+                try {
+                    statusFilter = Feedback.FeedbackStatus.valueOf(status.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid status parameter: {}", status);
+                    return ResponseEntity.badRequest().build();
+                }
+            }
+            
+            // Apply filters based on provided parameters
+            if (feedbackId != null && !feedbackId.trim().isEmpty()) {
+                // If feedbackId filter is provided, use it exclusively
+                feedbackPage = feedbackRepository.findByIdWithPagination(feedbackId, pageable);
+            } else if (userId != null && storyId != null && typeFilter != null && statusFilter != null) {
+                feedbackPage = feedbackRepository.findByUserIdAndStoryIdAndTypeAndStatus(userId, storyId, typeFilter, statusFilter, pageable);
+            } else if (userId != null && storyId != null && typeFilter != null) {
+                feedbackPage = feedbackRepository.findByUserIdAndStoryIdAndType(userId, storyId, typeFilter, pageable);
+            } else if (userId != null && storyId != null && statusFilter != null) {
+                feedbackPage = feedbackRepository.findByUserIdAndStoryIdAndStatus(userId, storyId, statusFilter, pageable);
+            } else if (userId != null && typeFilter != null && statusFilter != null) {
+                feedbackPage = feedbackRepository.findByUserIdAndTypeAndStatus(userId, typeFilter, statusFilter, pageable);
+            } else if (storyId != null && typeFilter != null && statusFilter != null) {
+                feedbackPage = feedbackRepository.findByStoryIdAndTypeAndStatus(storyId, typeFilter, statusFilter, pageable);
+            } else if (userId != null && storyId != null) {
+                feedbackPage = feedbackRepository.findByUserIdAndStoryId(userId, storyId, pageable);
+            } else if (userId != null && typeFilter != null) {
+                feedbackPage = feedbackRepository.findByUserIdAndType(userId, typeFilter, pageable);
+            } else if (userId != null && statusFilter != null) {
+                feedbackPage = feedbackRepository.findByUserIdAndStatus(userId, statusFilter, pageable);
+            } else if (storyId != null && typeFilter != null) {
+                feedbackPage = feedbackRepository.findByStoryIdAndType(storyId, typeFilter, pageable);
+            } else if (storyId != null && statusFilter != null) {
+                feedbackPage = feedbackRepository.findByStoryIdAndStatus(storyId, statusFilter, pageable);
+            } else if (typeFilter != null && statusFilter != null) {
+                feedbackPage = feedbackRepository.findByTypeAndStatus(typeFilter, statusFilter, pageable);
+            } else if (userId != null) {
+                feedbackPage = feedbackRepository.findByUserId(userId, pageable);
+            } else if (storyId != null) {
+                feedbackPage = feedbackRepository.findByStoryId(storyId, pageable);
+            } else if (typeFilter != null) {
+                feedbackPage = feedbackRepository.findByType(typeFilter, pageable);
+            } else if (statusFilter != null) {
+                feedbackPage = feedbackRepository.findByStatus(statusFilter, pageable);
+            } else {
+                // No filters applied, return all feedback
+                feedbackPage = feedbackRepository.findAll(pageable);
+            }
+            
+            List<Map<String, Object>> feedbackList = feedbackPage.getContent().stream()
+                    .map(feedback -> {
+                        Map<String, Object> feedbackMap = new HashMap<>();
+                        feedbackMap.put("id", feedback.getId());
+                        feedbackMap.put("storyId", feedback.getStoryId());
+                        feedbackMap.put("userId", feedback.getUserId());
+                        feedbackMap.put("type", feedback.getType() != null ? feedback.getType().name() : null);
+                        feedbackMap.put("subject", feedback.getSubject());
+                        feedbackMap.put("description", feedback.getDescription());
+                        feedbackMap.put("status", feedback.getStatus() != null ? feedback.getStatus().name() : null);
+                        feedbackMap.put("adminResponse", feedback.getAdminResponse());
+                        feedbackMap.put("fileUrl", feedback.getFileUrl());
+                        feedbackMap.put("createdAt", feedback.getCreatedAt());
+                        feedbackMap.put("updatedAt", feedback.getUpdatedAt());
+                        
+                        // Add user info if available
+                        try {
+                            User user = userService.getUserEntityById(feedback.getUserId());
+                            feedbackMap.put("userName", user.getName());
+                            feedbackMap.put("userEmail", user.getEmail());
+                        } catch (Exception e) {
+                            feedbackMap.put("userName", "Unknown");
+                            feedbackMap.put("userEmail", "Unknown");
+                        }
+                        
+                        // Add story info if available
+                        if (feedback.getStoryId() != null && !feedback.getStoryId().trim().isEmpty()) {
+                            try {
+                                Story story = storyRepository.findById(feedback.getStoryId()).orElse(null);
+                                if (story != null) {
+                                    feedbackMap.put("storyTitle", story.getTitle());
+                                    feedbackMap.put("storyLanguage", story.getLanguage());
+                                }
+                            } catch (Exception e) {
+                                feedbackMap.put("storyTitle", "Unknown");
+                                feedbackMap.put("storyLanguage", "Unknown");
+                            }
+                        }
+                        
+                        return feedbackMap;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            
+            return ResponseEntity.ok(PagedResponse.of(feedbackList, page, size, feedbackPage.getTotalElements()));
+            
+        } catch (Exception e) {
+            log.error("Error fetching feedback for admin: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @PutMapping("/feedback/{feedbackId}/status")
+    @Operation(summary = "Update feedback status", description = "Update the status of a specific feedback")
+    public ResponseEntity<Map<String, Object>> updateFeedbackStatus(
+            @PathVariable String feedbackId,
+            @RequestBody Map<String, String> request) {
+        
+        try {
+            String newStatus = request.get("status");
+            String adminResponse = request.get("adminResponse");
+            
+            if (newStatus == null || newStatus.trim().isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Status is required");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            Feedback feedback = feedbackRepository.findById(feedbackId)
+                    .orElseThrow(() -> new RuntimeException("Feedback not found"));
+            
+            // Validate status
+            Feedback.FeedbackStatus status;
+            try {
+                status = Feedback.FeedbackStatus.valueOf(newStatus.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Invalid status: " + newStatus);
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            // Update status
+            feedback.setStatus(status);
+            
+            // Update admin response if provided
+            if (adminResponse != null && !adminResponse.trim().isEmpty()) {
+                feedback.setAdminResponse(adminResponse.trim());
+            }
+            
+            feedbackRepository.save(feedback);
+            
+            // Log audit
+            auditService.logAudit("admin", Audit.EntityType.FEEDBACK, Audit.ActionType.UPDATE, feedbackId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Feedback status updated successfully");
+            response.put("feedbackId", feedbackId);
+            response.put("newStatus", status.name());
+            response.put("previousStatus", feedback.getStatus().name());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error updating feedback status: {}", e.getMessage(), e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    @DeleteMapping("/feedback/{feedbackId}")
+    @Operation(summary = "Delete feedback", description = "Delete a specific feedback")
+    public ResponseEntity<Map<String, Object>> deleteFeedback(@PathVariable String feedbackId) {
+        try {
+            Feedback feedback = feedbackRepository.findById(feedbackId)
+                    .orElseThrow(() -> new RuntimeException("Feedback not found"));
+            
+            feedbackRepository.deleteById(feedbackId);
+            
+            // Log audit
+            auditService.logAudit("admin", Audit.EntityType.FEEDBACK, Audit.ActionType.DELETE, feedbackId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Feedback deleted successfully");
+            response.put("feedbackId", feedbackId);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error deleting feedback: {}", e.getMessage(), e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
     
     // ==================== DASHBOARD STATISTICS ====================
     
@@ -852,6 +1144,10 @@ public class AdminController {
             // Withdrawal Statistics
             Map<String, Object> withdrawalStats = getWithdrawalStats(fromDateTime, toDateTime);
             dashboardStats.put("withdrawalStats", withdrawalStats);
+            
+            // Feedback Statistics
+            Map<String, Object> feedbackStats = getFeedbackStats(fromDateTime, toDateTime);
+            dashboardStats.put("feedbackStats", feedbackStats);
             
             // Date range info
             Map<String, Object> dateRange = new HashMap<>();
@@ -1368,10 +1664,9 @@ public class AdminController {
                 ((totalAmountInRange.doubleValue() - previousPeriodAmount.doubleValue()) / previousPeriodAmount.doubleValue()) * 100 : 0;
             stats.put("amountGrowthRate", Math.round(amountGrowthRate * 100.0) / 100.0);
             
-            // Top withdrawal amounts in date range
-            List<Map<String, Object>> topWithdrawals = withdrawalsInRange.stream()
-                    .filter(w -> w.getMoneyInRs() != null)
-                    .sorted((w1, w2) -> w2.getMoneyInRs().compareTo(w1.getMoneyInRs()))
+            // Recent withdrawals in date range (sorted by creation date, most recent first)
+            List<Map<String, Object>> recentWithdrawals = withdrawalsInRange.stream()
+                    .sorted((w1, w2) -> w2.getCreatedAt().compareTo(w1.getCreatedAt()))
                     .limit(5)
                     .map(w -> {
                         Map<String, Object> withdrawalInfo = new HashMap<>();
@@ -1384,7 +1679,7 @@ public class AdminController {
                         return withdrawalInfo;
                     })
                     .collect(java.util.stream.Collectors.toList());
-            stats.put("topWithdrawals", topWithdrawals);
+            stats.put("recentWithdrawals", recentWithdrawals);
             
             // Status distribution summary
             Map<String, Object> statusDistribution = new HashMap<>();
@@ -1397,6 +1692,164 @@ public class AdminController {
         } catch (Exception e) {
             log.warn("Error calculating withdrawal stats: {}", e.getMessage());
             stats.put("error", "Unable to calculate withdrawal statistics");
+        }
+        
+        return stats;
+    }
+    
+    private Map<String, Object> getFeedbackStats(LocalDateTime fromDate, LocalDateTime toDate) {
+        Map<String, Object> stats = new HashMap<>();
+        
+        try {
+            // Total feedback in date range
+            long totalFeedbackInRange = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).size();
+            stats.put("totalFeedbackInRange", totalFeedbackInRange);
+            
+            // Total feedback overall
+            long totalFeedbackOverall = feedbackRepository.count();
+            stats.put("totalFeedbackOverall", totalFeedbackOverall);
+            
+            // Feedback by status in date range
+            long pendingFeedback = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .filter(feedback -> feedback.getStatus() == Feedback.FeedbackStatus.PENDING)
+                    .count();
+            long inReviewFeedback = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .filter(feedback -> feedback.getStatus() == Feedback.FeedbackStatus.IN_REVIEW)
+                    .count();
+            long resolvedFeedback = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .filter(feedback -> feedback.getStatus() == Feedback.FeedbackStatus.RESOLVED)
+                    .count();
+            long valuedFeedback = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .filter(feedback -> feedback.getStatus() == Feedback.FeedbackStatus.VALUED)
+                    .count();
+            long closedFeedback = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .filter(feedback -> feedback.getStatus() == Feedback.FeedbackStatus.CLOSED)
+                    .count();
+            long rejectedFeedback = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .filter(feedback -> feedback.getStatus() == Feedback.FeedbackStatus.REJECTED)
+                    .count();
+            
+            stats.put("pendingFeedback", pendingFeedback);
+            stats.put("inReviewFeedback", inReviewFeedback);
+            stats.put("resolvedFeedback", resolvedFeedback);
+            stats.put("valuedFeedback", valuedFeedback);
+            stats.put("closedFeedback", closedFeedback);
+            stats.put("rejectedFeedback", rejectedFeedback);
+            
+            // Total feedback by status overall
+            stats.put("totalPendingFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.PENDING));
+            stats.put("totalInReviewFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.IN_REVIEW));
+            stats.put("totalResolvedFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.RESOLVED));
+            stats.put("totalValuedFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.VALUED));
+            stats.put("totalClosedFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.CLOSED));
+            stats.put("totalRejectedFeedback", feedbackRepository.countByStatus(Feedback.FeedbackStatus.REJECTED));
+            
+            // Feedback by type in date range
+            List<Map<String, Object>> typeStats = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .collect(java.util.stream.Collectors.groupingBy(
+                            feedback -> feedback.getType() != null ? feedback.getType() : Feedback.FeedbackType.GENERAL,
+                            java.util.stream.Collectors.counting()))
+                    .entrySet().stream()
+                    .map(entry -> {
+                        Map<String, Object> typeStat = new HashMap<>();
+                        typeStat.put("type", entry.getKey().name());
+                        typeStat.put("count", entry.getValue());
+                        return typeStat;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            stats.put("typeStats", typeStats);
+            
+            // Feedback by type and status
+            Map<String, Object> typeStatusStats = new HashMap<>();
+            for (Feedback.FeedbackType type : Feedback.FeedbackType.values()) {
+                Map<String, Object> typeStatusMap = new HashMap<>();
+                for (Feedback.FeedbackStatus status : Feedback.FeedbackStatus.values()) {
+                    long count = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                            .filter(feedback -> feedback.getType() == type && feedback.getStatus() == status)
+                            .count();
+                    typeStatusMap.put(status.name(), count);
+                }
+                typeStatusStats.put(type.name(), typeStatusMap);
+            }
+            stats.put("typeStatusStats", typeStatusStats);
+            
+            // Story-specific vs general feedback
+            long storySpecificFeedback = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .filter(feedback -> feedback.getStoryId() != null && !feedback.getStoryId().trim().isEmpty())
+                    .count();
+            long generalFeedback = totalFeedbackInRange - storySpecificFeedback;
+            stats.put("storySpecificFeedback", storySpecificFeedback);
+            stats.put("generalFeedback", generalFeedback);
+            
+            // Feedback with admin responses
+            long feedbackWithResponses = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .filter(feedback -> feedback.getAdminResponse() != null && !feedback.getAdminResponse().trim().isEmpty())
+                    .count();
+            stats.put("feedbackWithResponses", feedbackWithResponses);
+            stats.put("feedbackWithoutResponses", totalFeedbackInRange - feedbackWithResponses);
+            
+            // Response rate
+            double responseRate = totalFeedbackInRange > 0 ? (double) feedbackWithResponses / totalFeedbackInRange * 100 : 0;
+            stats.put("responseRate", Math.round(responseRate * 100.0) / 100.0);
+            
+            // Resolution rate
+            double resolutionRate = totalFeedbackInRange > 0 ? 
+                ((double) (resolvedFeedback + valuedFeedback) / totalFeedbackInRange) * 100 : 0;
+            stats.put("resolutionRate", Math.round(resolutionRate * 100.0) / 100.0);
+            
+            // Average daily feedback
+            long durationDays = java.time.Duration.between(fromDate, toDate).toDays();
+            double avgDailyFeedback = durationDays > 0 ? (double) totalFeedbackInRange / durationDays : 0;
+            stats.put("avgDailyFeedback", Math.round(avgDailyFeedback * 100.0) / 100.0);
+            
+            // Growth rate (comparing with previous period)
+            LocalDateTime previousFromDate = fromDate.minus(java.time.Duration.between(fromDate, toDate));
+            long previousPeriodFeedback = feedbackRepository.findByCreatedAtBetween(previousFromDate, fromDate).size();
+            double growthRate = previousPeriodFeedback > 0 ? 
+                ((double) (totalFeedbackInRange - previousPeriodFeedback) / previousPeriodFeedback) * 100 : 0;
+            stats.put("growthRate", Math.round(growthRate * 100.0) / 100.0);
+            
+            // Recent feedback (last 7 days)
+            LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
+            long recentFeedback = feedbackRepository.findByCreatedAtBetween(weekAgo, LocalDateTime.now()).size();
+            stats.put("recentFeedback", recentFeedback);
+            
+            // Top feedback types by count
+            List<Map<String, Object>> topFeedbackTypes = feedbackRepository.findByCreatedAtBetween(fromDate, toDate).stream()
+                    .collect(java.util.stream.Collectors.groupingBy(
+                            feedback -> feedback.getType() != null ? feedback.getType() : Feedback.FeedbackType.GENERAL,
+                            java.util.stream.Collectors.counting()))
+                    .entrySet().stream()
+                    .sorted((e1, e2) -> Long.compare(e2.getValue(), e1.getValue()))
+                    .limit(5)
+                    .map(entry -> {
+                        Map<String, Object> typeInfo = new HashMap<>();
+                        typeInfo.put("type", entry.getKey().name());
+                        typeInfo.put("count", entry.getValue());
+                        return typeInfo;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            stats.put("topFeedbackTypes", topFeedbackTypes);
+            
+            // Status distribution summary
+            Map<String, Object> statusDistribution = new HashMap<>();
+            statusDistribution.put("pending", Map.of("count", pendingFeedback, "percentage", 
+                totalFeedbackInRange > 0 ? Math.round(((double) pendingFeedback / totalFeedbackInRange) * 10000.0) / 100.0 : 0));
+            statusDistribution.put("inReview", Map.of("count", inReviewFeedback, "percentage", 
+                totalFeedbackInRange > 0 ? Math.round(((double) inReviewFeedback / totalFeedbackInRange) * 10000.0) / 100.0 : 0));
+            statusDistribution.put("resolved", Map.of("count", resolvedFeedback, "percentage", 
+                totalFeedbackInRange > 0 ? Math.round(((double) resolvedFeedback / totalFeedbackInRange) * 10000.0) / 100.0 : 0));
+            statusDistribution.put("valued", Map.of("count", valuedFeedback, "percentage", 
+                totalFeedbackInRange > 0 ? Math.round(((double) valuedFeedback / totalFeedbackInRange) * 10000.0) / 100.0 : 0));
+            statusDistribution.put("closed", Map.of("count", closedFeedback, "percentage", 
+                totalFeedbackInRange > 0 ? Math.round(((double) closedFeedback / totalFeedbackInRange) * 10000.0) / 100.0 : 0));
+            statusDistribution.put("rejected", Map.of("count", rejectedFeedback, "percentage", 
+                totalFeedbackInRange > 0 ? Math.round(((double) rejectedFeedback / totalFeedbackInRange) * 10000.0) / 100.0 : 0));
+            stats.put("statusDistribution", statusDistribution);
+            
+        } catch (Exception e) {
+            log.warn("Error calculating feedback stats: {}", e.getMessage());
+            stats.put("error", "Unable to calculate feedback statistics");
         }
         
         return stats;
