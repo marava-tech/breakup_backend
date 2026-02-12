@@ -1,0 +1,11 @@
+# Production profile - MongoDB requires auth. Set env vars:
+# SPRING_DATA_MONGODB_USERNAME, SPRING_DATA_MONGODB_PASSWORD (or MONGO_ROOT_USERNAME, MONGO_ROOT_PASSWORD)
+spring:
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:}
+      host: ${SPRING_DATA_MONGODB_HOST:${MONGO_HOST:localhost}}
+      port: ${SPRING_DATA_MONGODB_PORT:${MONGO_PORT:27017}}
+      database: ${SPRING_DATA_MONGODB_DATABASE:${MONGO_DATABASE:breakup_stories}}
+      username: ${SPRING_DATA_MONGODB_USERNAME:${MONGO_ROOT_USERNAME}}
+      password: ${SPRING_DATA_MONGODB_PASSWORD:${MONGO_ROOT_PASSWORD}}
