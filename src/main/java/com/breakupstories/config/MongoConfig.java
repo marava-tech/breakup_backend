@@ -23,6 +23,9 @@ import java.nio.charset.StandardCharsets;
 @EnableMongoRepositories(basePackages = "com.breakupstories.repository")
 public class MongoConfig {
 
+    @Value("${spring.data.mongodb.uri:}")
+    private String uri;
+
     @Value("${spring.data.mongodb.host:localhost}")
     private String host;
 
@@ -31,11 +34,6 @@ public class MongoConfig {
 
     @Value("${spring.data.mongodb.database:breakup_stories}")
     private String database;
-    
-    private String getDatabase() {
-        // Ensure database name is never empty - use default if empty or null
-        return (database != null && !database.trim().isEmpty()) ? database.trim() : "breakup_stories";
-    }
 
     @Value("${spring.data.mongodb.username:}")
     private String username;
@@ -49,36 +47,42 @@ public class MongoConfig {
     @Value("${spring.data.mongodb.read-preference:primary}")
     private String readPreference;
 
+    private String getDatabase() {
+        return (database != null && !database.trim().isEmpty()) ? database.trim() : "breakup_stories";
+    }
+
     @Bean
     @Primary
     public MongoClient mongoClient() {
-        // Build connection string with proper URL encoding for special characters
-        StringBuilder connectionString = new StringBuilder("mongodb://");
-        
-        if (username != null && !username.isEmpty() && password != null && !password.isEmpty()) {
-            // URL encode username and password to handle special characters like @, :, etc.
-            String encodedUsername = URLEncoder.encode(username, StandardCharsets.UTF_8);
-            String encodedPassword = URLEncoder.encode(password, StandardCharsets.UTF_8);
-            connectionString.append(encodedUsername).append(":").append(encodedPassword).append("@");
+        String connectionString;
+        if (uri != null && !uri.trim().isEmpty()) {
+            connectionString = uri.trim();
+        } else {
+            boolean hasAuth = username != null && !username.isEmpty() && password != null && !password.isEmpty();
+            StringBuilder sb = new StringBuilder("mongodb://");
+            if (hasAuth) {
+                sb.append(URLEncoder.encode(username, StandardCharsets.UTF_8))
+                  .append(":").append(URLEncoder.encode(password, StandardCharsets.UTF_8))
+                  .append("@");
+            }
+            sb.append(host).append(":").append(port).append("/").append(getDatabase());
+            sb.append("?");
+            if (hasAuth) {
+                sb.append("authSource=").append(authenticationDatabase).append("&");
+            }
+            sb.append("retryWrites=true&retryReads=true");
+            sb.append("&serverSelectionTimeoutMS=30000");
+            sb.append("&connectTimeoutMS=30000");
+            sb.append("&socketTimeoutMS=30000");
+            connectionString = sb.toString();
         }
-        
-        String dbName = getDatabase();
-        connectionString.append(host).append(":").append(port);
-        connectionString.append("/").append(dbName);
-        connectionString.append("?authSource=").append(authenticationDatabase);
-        connectionString.append("&retryWrites=true&retryReads=true");
-        connectionString.append("&serverSelectionTimeoutMS=30000");
-        connectionString.append("&connectTimeoutMS=30000");
-        connectionString.append("&socketTimeoutMS=30000");
-        
+
         MongoClientSettings.Builder builder = MongoClientSettings.builder()
-                .applyConnectionString(new ConnectionString(connectionString.toString()));
+                .applyConnectionString(new ConnectionString(connectionString));
         if ("secondaryPreferred".equalsIgnoreCase(readPreference)) {
             builder.readPreference(ReadPreference.secondaryPreferred());
         }
-        MongoClientSettings settings = builder.build();
-        
-        return MongoClients.create(settings);
+        return MongoClients.create(builder.build());
     }
 
     @Bean
