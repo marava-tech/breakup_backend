@@ -19,6 +19,8 @@ import com.breakupstories.util.ApplicationContextProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -118,6 +120,7 @@ public class UserService implements UserDetailsService {
         return UserResponse.fromUser(savedUser);
     }
     
+    @CacheEvict(value = "user-entity", allEntries = true)
     public UserResponse updateProfileImage(String userEmail, MultipartFile imageFile) {
         log.info("Updating profile image for user: {}", userEmail);
         
@@ -203,6 +206,7 @@ public class UserService implements UserDetailsService {
         return UserResponse.fromUser(user);
     }
     
+    @CacheEvict(value = "user-entity", allEntries = true)
     public UserResponse updateUser(String userId, UserRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
@@ -222,6 +226,7 @@ public class UserService implements UserDetailsService {
         return UserResponse.fromUser(updatedUser);
     }
     
+    @CacheEvict(value = "user-entity", allEntries = true)
     public void deleteUser(String userId) {
         if (!userRepository.existsById(userId)) {
             throw new ResourceNotFoundException("User", "id", userId);
@@ -230,16 +235,19 @@ public class UserService implements UserDetailsService {
         userRepository.deleteById(userId);
     }
     
+    @Cacheable(value = "user-entity", key = "'email:' + #email")
     public User getUserEntityByEmail(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
     }
-    
+
+    @Cacheable(value = "user-entity", key = "#userId")
     public User getUserEntityById(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
     }
     
+    @CacheEvict(value = "user-entity", allEntries = true)
     public UserResponse updatePreferredStoryLanguage(String userEmail, String preferredStoryLanguage) {
         log.info("Updating preferred story language for user: {} -> {}", userEmail, preferredStoryLanguage);
         

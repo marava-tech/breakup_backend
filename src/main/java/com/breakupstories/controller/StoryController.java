@@ -5,7 +5,6 @@ import com.breakupstories.dto.PagedResponse;
 import com.breakupstories.dto.RequestIdResponse;
 import com.breakupstories.dto.StoryResponse;
 import com.breakupstories.dto.WrittenStoryRequest;
-import com.breakupstories.dto.WithdrawalEligibilityResponse;
 import com.breakupstories.enums.StorySearchType;
 import com.breakupstories.model.Story;
 import com.breakupstories.model.User;
@@ -125,43 +124,43 @@ public class StoryController {
     }
     
     @GetMapping
-    @Operation(summary = "Get all stories", description = "Retrieve paginated list of active stories with automatic language filtering")
+    @Operation(summary = "Get all stories", description = "Retrieve paginated list of active stories. Use cursor param for efficient deep pagination.")
     public ResponseEntity<PagedResponse<StoryResponse>> getStories(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String language,
+            @RequestParam(required = false) String cursor,
             Authentication authentication) {
         
         PagedResponse<StoryResponse> response;
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new RuntimeException("login required");
         }
-            String email = authentication.getName();
-            User user = userService.getUserEntityByEmail(email);
-            String userId = user.getId();
-            String userPreferredLanguage = user.getPreferredStoryLanguage();
-            
-            // Use provided language or user's preferred language
-            String filterLanguage = (language != null && !language.trim().isEmpty()) ? language : userPreferredLanguage;
-            
-            if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
-                response = storyService.getStoriesByLanguage(filterLanguage, userId, page, size);
-            } else {
-                response = storyService.getStories(userId, page, size);
-            }
+        String email = authentication.getName();
+        User user = userService.getUserEntityByEmail(email);
+        String userId = user.getId();
+        String filterLanguage = (language != null && !language.trim().isEmpty()) ? language : user.getPreferredStoryLanguage();
         
+        if (cursor != null && !cursor.isBlank()) {
+            response = storyService.getLatestStoriesWithCursor(userId, cursor, size);
+        } else if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+            response = storyService.getStoriesByLanguage(filterLanguage, userId, page, size);
+        } else {
+            response = storyService.getStories(userId, page, size);
+        }
         return ResponseEntity.ok(response);
     }
 
 
     @GetMapping("/type")
-    @Operation(summary = "Get stories by search type", description = "Retrieve paginated list of stories based on search type with automatic language filtering")
+    @Operation(summary = "Get stories by search type", description = "Retrieve paginated list of stories. Use cursor for efficient LATEST/GENERAL pagination.")
     public ResponseEntity<PagedResponse<StoryResponse>> getStoriesByType(
             @RequestParam StorySearchType searchType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String storyId,
             @RequestParam(required = false) String language,
+            @RequestParam(required = false) String cursor,
             HttpServletRequest request,
             Authentication authentication) {
         
@@ -202,7 +201,9 @@ public class StoryController {
                     }
                 }
                 case LATEST -> {
-                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                    if (cursor != null && !cursor.isBlank()) {
+                        response = storyService.getLatestStoriesWithCursor(userId, cursor, size);
+                    } else if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
                         response = storyService.getLatestStoriesByLanguage(filterLanguage, userId, page, size);
                     } else {
                         response = storyService.getLatestStories(userId, page, size);
@@ -223,7 +224,9 @@ public class StoryController {
                     }
                 }
                 case GENERAL -> {
-                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                    if (cursor != null && !cursor.isBlank()) {
+                        response = storyService.getLatestStoriesWithCursor(userId, cursor, size);
+                    } else if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
                         response = storyService.getStoriesByLanguage(filterLanguage, userId, page, size);
                     } else {
                         response = storyService.getStories(userId, page, size);
@@ -248,7 +251,9 @@ public class StoryController {
                     }
                 }
                 case LATEST -> {
-                    if (language != null && !language.trim().isEmpty()) {
+                    if (cursor != null && !cursor.isBlank()) {
+                        response = storyService.getLatestStoriesWithCursor(null, cursor, size);
+                    } else if (language != null && !language.trim().isEmpty()) {
                         response = storyService.getLatestStoriesByLanguage(language, page, size);
                     } else {
                         response = storyService.getLatestStories(page, size);
@@ -269,9 +274,19 @@ public class StoryController {
                     }
                 }
                 case GENERAL -> {
-                    response = storyService.getStories(page, size);
+                    if (cursor != null && !cursor.isBlank()) {
+                        response = storyService.getLatestStoriesWithCursor(null, cursor, size);
+                    } else {
+                        response = storyService.getStories(page, size);
+                    }
                 }
-                default -> response = storyService.getStories(page, size);
+                default -> {
+                    if (cursor != null && !cursor.isBlank()) {
+                        response = storyService.getLatestStoriesWithCursor(null, cursor, size);
+                    } else {
+                        response = storyService.getStories(page, size);
+                    }
+                }
             }
         }
         
@@ -324,9 +339,9 @@ public class StoryController {
         //     }
         // }
         
-        // Always increment view count regardless of who viewed it or how many times
-        storyService.incrementViewCount(storyId);
-        log.info("View count incremented for story: {} (viewed by user: {}, ip: {})", storyId, userId, ipAddress);
+        // Async: increment view count and audit — non-blocking, removes DB writes from response path
+        storyService.incrementViewCountAsync(storyId);
+        log.debug("View count increment scheduled for story: {} (viewed by user: {}, ip: {})", storyId, userId, ipAddress);
         
         // COMMENTED OUT: Only increment view count if user is not viewing their own story and hasn't viewed recently
         // if (!isOwnStory) {
@@ -336,21 +351,20 @@ public class StoryController {
         //     log.info("View count not incremented for story: {} (user viewing their own story: {})", storyId, userId);
         // }
         
-        // Audit story view (always audit, regardless of cooldown or self-view)
+        // Audit story view (async — non-blocking)
         boolean isOwnStory = false;
         if (userId != null) {
             Story story = storyRepository.findById(storyId).orElse(null);
             if (story != null) {
                 isOwnStory = userId.equals(story.getUserId());
             }
-            auditService.logStoryView(userId, storyId, clientInfo.getUserAgent(), 
-                                    clientInfo.getIpAddress(), clientInfo.getSessionId(), isOwnStory);
-            log.info("Audited story view for user {} on story {} (own story: {})", userId, storyId, isOwnStory);
+            auditService.logStoryViewAsync(userId, storyId, clientInfo.getUserAgent(), 
+                    clientInfo.getIpAddress(), clientInfo.getSessionId(), isOwnStory);
+            log.debug("Story view audit scheduled for user {} on story {}", userId, storyId);
         } else if (ipAddress != null) {
-            // For unauthenticated users, log with IP address
-            auditService.logStoryViewByIP(ipAddress, storyId, clientInfo.getUserAgent(), 
-                                        clientInfo.getSessionId());
-            log.info("Audited story view for IP {} on story {}", ipAddress, storyId);
+            auditService.logStoryViewByIPAsync(ipAddress, storyId, clientInfo.getUserAgent(), 
+                    clientInfo.getSessionId());
+            log.debug("Story view audit scheduled for IP {} on story {}", ipAddress, storyId);
         }
         
         return ResponseEntity.ok(response);
@@ -372,11 +386,10 @@ public class StoryController {
         log.info("User {} attempting to like story {}", userId, storyId);
         LikeResponse response = storyService.likeStory(userId, storyId);
         
-        // Audit story like
+        // Audit story like (async)
         ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
-        auditService.logStoryLike(userId, storyId, clientInfo.getUserAgent(), 
-                                clientInfo.getIpAddress(), clientInfo.getSessionId());
-        log.info("Audited story like for user {} on story {}", userId, storyId);
+        auditService.logStoryLikeAsync(userId, storyId, clientInfo.getUserAgent(), 
+                clientInfo.getIpAddress(), clientInfo.getSessionId());
         
         return ResponseEntity.ok(response);
     }
@@ -397,34 +410,14 @@ public class StoryController {
         log.info("User {} attempting to unlike story {}", userId, storyId);
         storyService.unlikeStory(userId, storyId);
         
-        // Audit story unlike
+        // Audit story unlike (async)
         ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
-        auditService.logStoryUnlike(userId, storyId, clientInfo.getUserAgent(), 
-                                  clientInfo.getIpAddress(), clientInfo.getSessionId());
-        log.info("Audited story unlike for user {} on story {}", userId, storyId);
+        auditService.logStoryUnlikeAsync(userId, storyId, clientInfo.getUserAgent(), 
+                clientInfo.getIpAddress(), clientInfo.getSessionId());
         
         return ResponseEntity.noContent().build();
     }
     
-    @GetMapping("/liked")
-    @Operation(summary = "Get liked stories", description = "Get stories liked by the authenticated user")
-    public ResponseEntity<PagedResponse<StoryResponse>> getLikedStories(
-            Authentication authentication,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new RuntimeException("login required");
-        }
-        
-        String email = authentication.getName();
-        User user = userService.getUserEntityByEmail(email);
-        String userId = user.getId();
-        
-        PagedResponse<StoryResponse> response = storyService.getLikedStories(userId, page, size);
-        return ResponseEntity.ok(response);
-    }
-
     @GetMapping("/my-stories")
     @Operation(summary = "Get my stories", description = "Get all stories uploaded, written, or recorded by the authenticated user with status from Story entity only")
     public ResponseEntity<PagedResponse<StoryResponse>> getMyStories(
@@ -444,13 +437,6 @@ public class StoryController {
         return ResponseEntity.ok(response);
     }
     
-    @GetMapping("/{storyId}/like-count")
-    @Operation(summary = "Get like count", description = "Get the number of likes for a story")
-    public ResponseEntity<Long> getLikeCount(@PathVariable String storyId) {
-        long likeCount = storyService.getLikeCount(storyId);
-        return ResponseEntity.ok(likeCount);
-    }
-
     @GetMapping("/search")
     @Operation(summary = "Search stories by content", description = "Search stories by title and tags using unified search content (case-insensitive)")
     public ResponseEntity<PagedResponse<StoryResponse>> searchStoriesByContent(
@@ -484,40 +470,4 @@ public class StoryController {
 
 
 
-    @GetMapping("/test-story-images/{storyId}")
-    public ResponseEntity<Map<String, Object>> testStoryImages(@PathVariable String storyId) {
-        try {
-            StoryResponse storyResponse = storyService.getStoryById(storyId);
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("storyId", storyId);
-            response.put("storyImages", storyResponse.getStoryImages());
-            response.put("imageCount", storyResponse.getStoryImages() != null ? storyResponse.getStoryImages().size() : 0);
-            response.put("message", "Story images retrieved successfully");
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", e.getMessage());
-            response.put("message", "Failed to retrieve story images");
-            
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
-    }
-    
-    @GetMapping("/withdrawal-eligibility")
-    @Operation(summary = "Check withdrawal eligibility", description = "Check if user has uploaded an active story and is eligible for coin withdrawal")
-    public ResponseEntity<WithdrawalEligibilityResponse> checkWithdrawalEligibility(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new RuntimeException("login required");
-        }
-        
-        String email = authentication.getName();
-        User user = userService.getUserEntityByEmail(email);
-        String userId = user.getId();
-        
-        WithdrawalEligibilityResponse response = storyService.checkWithdrawalEligibility(userId);
-        return ResponseEntity.ok(response);
-    }
 } 

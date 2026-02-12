@@ -53,31 +53,12 @@ public class BookmarkController {
         
         BookmarkResponse response = bookmarkService.createBookmark(userId, storyId);
         
-        // Audit bookmark creation
+        // Audit bookmark creation (async)
         ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
-        auditService.logBookmarkCreate(userId, storyId, clientInfo.getUserAgent(),
-                                     clientInfo.getIpAddress(), clientInfo.getSessionId());
-        log.info("Audited bookmark creation for user {} on story {}", userId, storyId);
+        auditService.logBookmarkCreateAsync(userId, storyId, clientInfo.getUserAgent(),
+                clientInfo.getIpAddress(), clientInfo.getSessionId());
         
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-    
-    @GetMapping
-    @Operation(summary = "Get user bookmarks", description = "Get paginated list of bookmarks for the authenticated user")
-    public ResponseEntity<PagedResponse<BookmarkResponse>> getUserBookmarks(
-            Authentication authentication,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        
-        String email = authentication.getName();
-        String userId = userService.getUserEntityByEmail(email).getId();
-        
-        PagedResponse<BookmarkResponse> response = bookmarkService.getBookmarksByUser(userId, page, size);
-        return ResponseEntity.ok(response);
     }
     
     @GetMapping("/stories")
@@ -98,67 +79,6 @@ public class BookmarkController {
         return ResponseEntity.ok(response);
     }
     
-    @GetMapping("/check/{storyId}")
-    @Operation(summary = "Check bookmark status", description = "Check if a story is bookmarked by the authenticated user")
-    public ResponseEntity<Boolean> isBookmarked(
-            @PathVariable String storyId,
-            Authentication authentication) {
-        
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        
-        String email = authentication.getName();
-        String userId = userService.getUserEntityByEmail(email).getId();
-        
-        boolean isBookmarked = bookmarkService.isBookmarked(userId, storyId);
-        return ResponseEntity.ok(isBookmarked);
-    }
-    
-    @GetMapping("/count")
-    @Operation(summary = "Get bookmark count", description = "Get the total number of bookmarks for the authenticated user")
-    public ResponseEntity<Long> getBookmarkCount(Authentication authentication) {
-        
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        
-        String email = authentication.getName();
-        String userId = userService.getUserEntityByEmail(email).getId();
-        
-        long count = bookmarkService.getBookmarkCountByUser(userId);
-        return ResponseEntity.ok(count);
-    }
-    
-    @DeleteMapping("/{bookmarkId}")
-    @Operation(summary = "Delete bookmark by ID", description = "Delete a specific bookmark by its ID")
-    public ResponseEntity<Void> deleteBookmark(
-            @PathVariable String bookmarkId,
-            Authentication authentication) {
-        
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        
-        String email = authentication.getName();
-        String userId = userService.getUserEntityByEmail(email).getId();
-        
-        log.info("User {} deleting bookmark {}", userId, bookmarkId);
-        
-        // Get bookmark details for auditing
-        BookmarkResponse bookmark = bookmarkService.getBookmarkById(bookmarkId);
-        
-        bookmarkService.deleteBookmark(bookmarkId, userId);
-        
-        // Audit bookmark deletion
-        ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
-        auditService.logBookmarkDelete(userId, bookmark.getStoryId(), clientInfo.getUserAgent(), 
-                                     clientInfo.getIpAddress(), clientInfo.getSessionId());
-        log.info("Audited bookmark deletion for user {} on story {}", userId, bookmark.getStoryId());
-        
-        return ResponseEntity.noContent().build();
-    }
-    
     @DeleteMapping("/story/{storyId}")
     @Operation(summary = "Remove bookmark by story", description = "Remove bookmark for a specific story")
     public ResponseEntity<Void> removeBookmarkByStory(
@@ -176,35 +96,12 @@ public class BookmarkController {
         
         bookmarkService.deleteBookmarkByUserAndStory(userId, storyId);
         
-        // Audit bookmark deletion
+        // Audit bookmark deletion (async)
         ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
-        auditService.logBookmarkDelete(userId, storyId, clientInfo.getUserAgent(), 
-                                     clientInfo.getIpAddress(), clientInfo.getSessionId());
-        log.info("Audited bookmark deletion for user {} on story {}", userId, storyId);
+        auditService.logBookmarkDeleteAsync(userId, storyId, clientInfo.getUserAgent(), 
+                clientInfo.getIpAddress(), clientInfo.getSessionId());
         
         return ResponseEntity.noContent().build();
     }
     
-    @GetMapping("/{bookmarkId}")
-    @Operation(summary = "Get bookmark by ID", description = "Get a specific bookmark by its ID")
-    public ResponseEntity<BookmarkResponse> getBookmarkById(
-            @PathVariable String bookmarkId,
-            Authentication authentication) {
-        
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        
-        String email = authentication.getName();
-        String userId = userService.getUserEntityByEmail(email).getId();
-        
-        BookmarkResponse bookmark = bookmarkService.getBookmarkById(bookmarkId);
-        
-        // Check if user owns this bookmark
-        if (!bookmark.getUserId().equals(userId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-        
-        return ResponseEntity.ok(bookmark);
-    }
 } 

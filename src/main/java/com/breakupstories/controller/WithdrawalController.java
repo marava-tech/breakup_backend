@@ -2,7 +2,6 @@ package com.breakupstories.controller;
 
 import com.breakupstories.dto.WithdrawalRequest;
 import com.breakupstories.dto.WithdrawalResponse;
-import com.breakupstories.dto.WithdrawalStatusUpdateRequest;
 import com.breakupstories.model.Withdrawal;
 import com.breakupstories.service.UserService;
 import com.breakupstories.service.WithdrawalService;
@@ -101,26 +100,6 @@ public class WithdrawalController {
             errorResponse.put("error", e.getMessage());
             errorResponse.put("message", "Failed to update withdrawal status");
             return ResponseEntity.badRequest().body(errorResponse);
-        }
-    }
-    
-    @PutMapping("/{withdrawalId}/status-json")
-    @Operation(summary = "Update withdrawal status with JSON (Admin)", description = "Update withdrawal status with comments using JSON request body")
-    public ResponseEntity<WithdrawalResponse> updateWithdrawalStatusJson(
-            @PathVariable String withdrawalId,
-            @Valid @RequestBody WithdrawalStatusUpdateRequest request) {
-        
-        try {
-            WithdrawalResponse response = withdrawalService.updateWithdrawalStatus(
-                withdrawalId, 
-                request.getStatus(), 
-                null, // No proof image URL in JSON request
-                request.getComments()
-            );
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
         }
     }
     

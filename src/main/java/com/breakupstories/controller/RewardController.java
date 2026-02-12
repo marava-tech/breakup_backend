@@ -5,7 +5,6 @@ import com.breakupstories.dto.AddCoinHistoryResponse;
 import com.breakupstories.dto.CoinBalanceResponse;
 import com.breakupstories.dto.CoinHistoryInvalidationRequest;
 import com.breakupstories.dto.ReferralStatsResponse;
-import com.breakupstories.dto.RewardConfigResponse;
 import com.breakupstories.model.CoinHistory;
 import com.breakupstories.service.RewardService;
 import com.breakupstories.service.UserService;
@@ -57,24 +56,6 @@ public class RewardController {
     public ResponseEntity<CoinBalanceResponse> getCoinBalanceByUserId(@PathVariable String userId) {
         log.info("Coin balance request for user ID: {}", userId);
         CoinBalanceResponse response = rewardService.getCoinBalance(userId);
-        
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/referral-stats/{userId}")
-    @Operation(summary = "Get referral statistics by user ID", description = "Get referral stats for a specific user (Admin only)")
-    public ResponseEntity<ReferralStatsResponse> getReferralStatsByUserId(@PathVariable String userId) {
-        log.info("Referral stats request for user ID: {}", userId);
-        ReferralStatsResponse response = rewardService.getReferralStats(userId);
-        
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/configurations")
-    @Operation(summary = "Get reward configurations", description = "Get all reward and referral configurations as key-value pairs for frontend display")
-    public ResponseEntity<RewardConfigResponse> getRewardConfigurations() {
-        log.info("Reward configurations request");
-        RewardConfigResponse response = rewardService.getRewardConfigurations();
         
         return ResponseEntity.ok(response);
     }

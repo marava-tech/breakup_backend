@@ -39,6 +39,24 @@ db.stories.createIndex({ "metadata.language": 1 });
 db.stories.createIndex({ "viewCount": -1 });
 db.stories.createIndex({ "createdAt": -1 });
 
+// Compound indexes for common query patterns
+db.stories.createIndex(
+  { "language": 1, "status": 1, "createdAt": -1 },
+  { name: "idx_stories_lang_status_date" }
+);
+db.stories.createIndex(
+  { "status": 1, "viewCount": -1 },
+  { name: "idx_stories_status_views" }
+);
+db.stories.createIndex(
+  { "status": 1, "createdAt": -1 },
+  { name: "idx_stories_status_date" }
+);
+db.stories.createIndex(
+  { "userId": 1, "status": 1, "createdAt": -1 },
+  { name: "idx_stories_user_status_date" }
+);
+
 db.likes.createIndex({ "userId": 1 });
 db.likes.createIndex({ "storyId": 1 });
 db.likes.createIndex({ "userId": 1, "storyId": 1 }, { unique: true });
@@ -47,6 +65,10 @@ db.comments.createIndex({ "storyId": 1 });
 db.comments.createIndex({ "userId": 1 });
 db.comments.createIndex({ "parentId": 1 });
 db.comments.createIndex({ "createdAt": -1 });
+db.comments.createIndex(
+  { "storyId": 1, "parentId": 1, "active": 1, "createdAt": -1 },
+  { name: "idx_comments_story_parent_active_date" }
+);
 
 db.bookmarks.createIndex({ "userId": 1 });
 db.bookmarks.createIndex({ "storyId": 1 });
@@ -69,6 +91,28 @@ db.audits.createIndex({ "entityId": 1, "entityType": 1, "actionType": 1, "create
 db.audits.createIndex({ "entityId": 1, "createdAt": -1 });
 
 db.default_configs.createIndex({ "key": 1 }, { unique: true });
+
+// coin_history - for valid balance calculation
+db.coin_history.createIndex(
+  { "userId": 1, "invalidate": 1 },
+  { name: "idx_coinhistory_user_valid" }
+);
+
+// withdrawals - for user and status queries
+db.withdrawals.createIndex(
+  { "userId": 1, "createdAt": -1 },
+  { name: "idx_withdrawals_user_date" }
+);
+db.withdrawals.createIndex(
+  { "status": 1, "createdAt": -1 },
+  { name: "idx_withdrawals_status_date" }
+);
+
+// users - for referral stats
+db.users.createIndex(
+  { "referredBy": 1 },
+  { name: "idx_users_referredby" }
+);
 
 print('MongoDB initialization completed successfully!');
 print('Database: breakup_stories');

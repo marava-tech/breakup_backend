@@ -20,13 +20,21 @@ import com.breakupstories.repository.StoryDataStoreRepository;
 import com.breakupstories.util.ApplicationContextProvider;
 import com.breakupstories.util.RequestContext;
 import com.breakupstories.util.ListUtils;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
+import com.breakupstories.service.TrendingCacheService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
@@ -45,12 +53,16 @@ public class StoryService {
     
     private final StoryRepository storyRepository;
     private final StoryDataStoreRepository storyDataStoreRepository;
+    private final MongoTemplate mongoTemplate;
     private final LikeService likeService;
     private final CommentService commentService;
     @Lazy
     private final UserService userService;
     @Lazy
+    private final TrendingCacheService trendingCacheService;
+    @Lazy
     private final BookmarkService bookmarkService;
+    private final ViewCountBatchService viewCountBatchService;
     private final StoryDataStoreService storyDataStoreService;
     private final DefaultConfigService defaultConfigService;
 
@@ -242,148 +254,124 @@ public class StoryService {
     }
     
     /**
-     * Get trending stories sorted by trending score (for unauthenticated users)
-     * Trending score = (likes * 1.0) + (views * 0.4) + (comments * 0.6)
-     * @param page Page number
-     * @param size Page size
-     * @return PagedResponse of trending stories
+     * Get trending stories sorted by trending score (for unauthenticated users).
+     * Uses precomputed cache from TrendingCacheService to avoid full collection scan.
      */
     public PagedResponse<StoryResponse> getTrendingStories(int page, int size) {
         String requestId = RequestContext.getRequestId();
-        log.info("Getting trending stories for unauthenticated user [RequestID: {}]", requestId);
+        log.debug("Getting trending stories for unauthenticated user [RequestID: {}]", requestId);
         
         try {
-            // Get all active stories
-            List<Story> allActiveStories = storyRepository.findByStatus(Story.StoryStatus.ACTIVE);
+            List<String> ids = trendingCacheService.getTrendingStoryIds();
+            if (ids == null || ids.isEmpty()) {
+                trendingCacheService.refreshTrendingCache();
+                ids = trendingCacheService.getTrendingStoryIds();
+            }
+            if (ids == null || ids.isEmpty()) {
+                return getTrendingStoriesFallback(page, size, null);
+            }
             
-            // Calculate trending scores and create StoryWithTrendingScore objects
-            List<StoryWithTrendingScore> storiesWithScores = allActiveStories.stream()
-                    .map(story -> {
-                        try {
-                            long likeCount = getLikeCount(story.getId());
-                            long viewCount = story.getViewCount() != null ? story.getViewCount() : 0L;
-                            long commentCount = getCommentCount(story.getId());
-                            
-                            return StoryWithTrendingScore.fromStory(story, likeCount, viewCount, commentCount);
-                        } catch (Exception e) {
-                            log.warn("Error calculating trending score for story {} [RequestID: {}]: {}", 
-                                    story.getId(), requestId, e.getMessage());
-                            return null;
-                        }
-                    })
-                    .filter(storyWithScore -> storyWithScore != null)
-                    .sorted((s1, s2) -> Double.compare(s2.getTrendingScore(), s1.getTrendingScore())) // Sort by trending score descending
-                    .collect(Collectors.toList());
-            
-            log.info("Calculated trending scores for {} stories [RequestID: {}]", storiesWithScores.size(), requestId);
-            
-            // Apply pagination
             int startIndex = page * size;
-            int endIndex = Math.min(startIndex + size, storiesWithScores.size());
+            int endIndex = Math.min(startIndex + size, ids.size());
+            if (startIndex >= ids.size()) {
+                return PagedResponse.of(List.of(), page, size, ids.size());
+            }
+            List<String> pageIds = ids.subList(startIndex, endIndex);
+            List<Story> stories = storyRepository.findByIdInAndStatus(pageIds, Story.StoryStatus.ACTIVE);
+            Map<String, Story> byId = stories.stream().collect(Collectors.toMap(Story::getId, s -> s));
+            List<Story> ordered = pageIds.stream().map(byId::get).filter(Objects::nonNull).toList();
             
-            List<StoryResponse> paginatedStories = storiesWithScores.stream()
-                    .skip(startIndex)
-                    .limit(size)
-                    .map(storyWithScore -> {
-                        try {
-                            Story story = storyWithScore.getStory();
-                            User user = userService.getUserEntityById(story.getUserId());
-                            return StoryResponse.fromStory(story, user, false, false, 
-                                    storyWithScore.getLikeCount(), storyWithScore.getCommentCount());
-                        } catch (Exception e) {
-                            log.error("Error creating StoryResponse for trending story {} [RequestID: {}]: {}", 
-                                    storyWithScore.getStory().getId(), requestId, e.getMessage());
-                            return null;
-                        }
+            List<StoryResponse> responses = ordered.stream()
+                    .map(story -> {
+                        User user = userService.getUserEntityById(story.getUserId());
+                        long likeCount = getLikeCount(story.getId());
+                        long commentCount = getCommentCount(story.getId());
+                        return StoryResponse.fromStory(story, user, false, false, likeCount, commentCount);
                     })
-                    .filter(story -> story != null)
                     .collect(Collectors.toList());
             
-            log.info("Returning {} trending stories for page {} [RequestID: {}]", 
-                    paginatedStories.size(), page, requestId);
-            
-            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
-            
+            return PagedResponse.of(responses, page, size, ids.size());
         } catch (Exception e) {
-            log.error("Error getting trending stories [RequestID: {}]: {}", requestId, e.getMessage(), e);
-            throw new RuntimeException("Failed to get trending stories: " + e.getMessage(), e);
+            log.warn("Trending cache read failed, falling back to full scan [RequestID: {}]: {}", requestId, e.getMessage());
+            return getTrendingStoriesFallback(page, size, null);
         }
     }
     
     /**
-     * Get trending stories sorted by trending score (for authenticated users)
-     * Trending score = (likes * 1.0) + (views * 0.4) + (comments * 0.6)
-     * @param currentUserId The current user ID
-     * @param page Page number
-     * @param size Page size
-     * @return PagedResponse of trending stories with user context
+     * Get trending stories sorted by trending score (for authenticated users).
+     * Uses precomputed cache from TrendingCacheService.
      */
     public PagedResponse<StoryResponse> getTrendingStories(String currentUserId, int page, int size) {
         String requestId = RequestContext.getRequestId();
-        log.info("Getting trending stories for user: {} [RequestID: {}]", currentUserId, requestId);
+        log.debug("Getting trending stories for user: {} [RequestID: {}]", currentUserId, requestId);
         
         try {
-            // Get all active stories
-            List<Story> allActiveStories = storyRepository.findByStatus(Story.StoryStatus.ACTIVE);
+            List<String> ids = trendingCacheService.getTrendingStoryIds();
+            if (ids == null || ids.isEmpty()) {
+                trendingCacheService.refreshTrendingCache();
+                ids = trendingCacheService.getTrendingStoryIds();
+            }
+            if (ids == null || ids.isEmpty()) {
+                return getTrendingStoriesFallback(page, size, currentUserId);
+            }
             
-            // Calculate trending scores and create StoryWithTrendingScore objects
-            List<StoryWithTrendingScore> storiesWithScores = allActiveStories.stream()
-                    .map(story -> {
-                        try {
-                            long likeCount = getLikeCount(story.getId());
-                            long viewCount = story.getViewCount() != null ? story.getViewCount() : 0L;
-                            long commentCount = getCommentCount(story.getId());
-                            
-                            return StoryWithTrendingScore.fromStory(story, likeCount, viewCount, commentCount);
-                        } catch (Exception e) {
-                            log.warn("Error calculating trending score for story {} [RequestID: {}]: {}", 
-                                    story.getId(), requestId, e.getMessage());
-                            return null;
-                        }
-                    })
-                    .filter(storyWithScore -> storyWithScore != null)
-                    .sorted((s1, s2) -> Double.compare(s2.getTrendingScore(), s1.getTrendingScore())) // Sort by trending score descending
-                    .collect(Collectors.toList());
-            
-            log.info("Calculated trending scores for {} stories [RequestID: {}]", storiesWithScores.size(), requestId);
-            
-            // Apply pagination
             int startIndex = page * size;
-            int endIndex = Math.min(startIndex + size, storiesWithScores.size());
+            int endIndex = Math.min(startIndex + size, ids.size());
+            if (startIndex >= ids.size()) {
+                return PagedResponse.of(List.of(), page, size, ids.size());
+            }
+            List<String> pageIds = ids.subList(startIndex, endIndex);
+            List<Story> stories = storyRepository.findByIdInAndStatus(pageIds, Story.StoryStatus.ACTIVE);
+            Map<String, Story> byId = stories.stream().collect(Collectors.toMap(Story::getId, s -> s));
+            List<Story> ordered = pageIds.stream().map(byId::get).filter(Objects::nonNull).toList();
             
-            List<StoryResponse> paginatedStories = storiesWithScores.stream()
-                    .skip(startIndex)
-                    .limit(size)
-                    .map(storyWithScore -> {
-                        try {
-                            Story story = storyWithScore.getStory();
-                            User user = userService.getUserEntityById(story.getUserId());
-                            boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
-                            boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
-                            return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, 
-                                    storyWithScore.getLikeCount(), storyWithScore.getCommentCount());
-                        } catch (Exception e) {
-                            log.error("Error creating StoryResponse for trending story {} [RequestID: {}]: {}", 
-                                    storyWithScore.getStory().getId(), requestId, e.getMessage());
-                            return null;
-                        }
+            List<StoryResponse> responses = ordered.stream()
+                    .map(story -> {
+                        User user = userService.getUserEntityById(story.getUserId());
+                        boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                        boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                        long likeCount = getLikeCount(story.getId());
+                        long commentCount = getCommentCount(story.getId());
+                        return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
                     })
-                    .filter(story -> story != null)
                     .collect(Collectors.toList());
             
-            log.info("Returning {} trending stories for page {} [RequestID: {}]", 
-                    paginatedStories.size(), page, requestId);
-            
-            return PagedResponse.of(paginatedStories, page, size, storiesWithScores.size());
-            
+            return PagedResponse.of(responses, page, size, ids.size());
         } catch (Exception e) {
-            log.error("Error getting trending stories for user {} [RequestID: {}]: {}", 
-                    currentUserId, requestId, e.getMessage(), e);
-            throw new RuntimeException("Failed to get trending stories: " + e.getMessage(), e);
+            log.warn("Trending cache read failed, falling back to full scan [RequestID: {}]: {}", requestId, e.getMessage());
+            return getTrendingStoriesFallback(page, size, currentUserId);
         }
     }
 
+    /** Fallback: full collection scan when cache unavailable */
+    private PagedResponse<StoryResponse> getTrendingStoriesFallback(int page, int size, String currentUserId) {
+        List<Story> allActive = storyRepository.findByStatus(Story.StoryStatus.ACTIVE);
+        List<StoryWithTrendingScore> withScores = allActive.stream()
+                .map(s -> StoryWithTrendingScore.fromStory(s, getLikeCount(s.getId()),
+                        s.getViewCount() != null ? s.getViewCount() : 0L, getCommentCount(s.getId())))
+                .sorted((a, b) -> Double.compare(b.getTrendingScore(), a.getTrendingScore()))
+                .collect(Collectors.toList());
+        
+        int start = page * size;
+        List<StoryWithTrendingScore> pageItems = withScores.stream().skip(start).limit(size).toList();
+        List<StoryResponse> responses = pageItems.stream()
+                .map(sws -> {
+                    Story story = sws.getStory();
+                    User user = userService.getUserEntityById(story.getUserId());
+                    if (currentUserId != null) {
+                        boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                        boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+                        return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe,
+                                sws.getLikeCount(), sws.getCommentCount());
+                    }
+                    return StoryResponse.fromStory(story, user, false, false, sws.getLikeCount(), sws.getCommentCount());
+                })
+                .collect(Collectors.toList());
+        return PagedResponse.of(responses, page, size, withScores.size());
+    }
 
+
+    @Cacheable(value = "stories-type", key = "'FOR_YOU:' + #currentUserId + ':' + #page + ':' + #size")
     public PagedResponse<StoryResponse> getForYouStories(String currentUserId,int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByStatusOrderByViewCountDesc(Story.StoryStatus.ACTIVE, pageable);
@@ -410,6 +398,7 @@ public class StoryService {
      * @param size Page size
      * @return PagedResponse of for you stories in the specified language with user context
      */
+    @Cacheable(value = "stories-type", key = "'FOR_YOU:' + #language + ':' + #currentUserId + ':' + #page + ':' + #size")
     public PagedResponse<StoryResponse> getForYouStoriesByLanguage(String language, String currentUserId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByViewCountDesc(language, Story.StoryStatus.ACTIVE, pageable);
@@ -649,6 +638,7 @@ public class StoryService {
      * @param size Page size
      * @return PagedResponse of stories with status from Story entity only
      */
+    @Cacheable(value = "stories-mine", key = "#currentUserId + ':' + #page + ':' + #size")
     public PagedResponse<StoryResponse> getMyStories(String currentUserId, int page, int size) {
         String requestId = RequestContext.getRequestId();
         log.info("Getting my stories from Story entity for user: {} [RequestID: {}]", currentUserId, requestId);
@@ -802,6 +792,7 @@ public class StoryService {
      * @param size Page size
      * @return PagedResponse of stories in the specified language with user context
      */
+    @Cacheable(value = "stories-feed", key = "#language + ':' + #currentUserId + ':' + #page + ':' + #size")
     public PagedResponse<StoryResponse> getStoriesByLanguage(String language, String currentUserId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
@@ -827,6 +818,7 @@ public class StoryService {
      * @param size Page size
      * @return PagedResponse of stories in the specified language
      */
+    @Cacheable(value = "stories-feed", key = "#language + ':anon:' + #page + ':' + #size")
     public PagedResponse<StoryResponse> getStoriesByLanguage(String language, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
@@ -843,6 +835,7 @@ public class StoryService {
         return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
     }
     
+    @Cacheable(value = "story", key = "#storyId + ':' + (#currentUserId != null ? #currentUserId : 'anon')")
     public StoryResponse getStoryById(String storyId, String currentUserId) {
         Story story = storyRepository.findById(storyId)
                 .orElseThrow(() -> new RuntimeException("Story not found with ID: " + storyId));
@@ -859,6 +852,7 @@ public class StoryService {
         return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
     }
     
+    @Cacheable(value = "story", key = "#storyId + ':anon'")
     public StoryResponse getStoryById(String storyId) {
         Story story = storyRepository.findById(storyId)
                 .orElseThrow(() -> new RuntimeException("Story not found with ID: " + storyId));
@@ -877,6 +871,7 @@ public class StoryService {
      * @param storyId The story ID to like
      * @return LikeResponse with like details
      */
+    @CacheEvict(value = "story", allEntries = true)
     public LikeResponse likeStory(String userId, String storyId) {
         log.info("User {} attempting to like story {}", userId, storyId);
         
@@ -907,11 +902,18 @@ public class StoryService {
         return likeResponse;
     }
     
+    /** Evict story cache (call after admin update/delete). */
+    @CacheEvict(value = "story", allEntries = true)
+    public void evictStoryCache() {
+        // No-op; annotation triggers cache eviction when called from another bean
+    }
+
     /**
      * Unlike a story
      * @param userId The user ID who is unliking the story
      * @param storyId The story ID to unlike
      */
+    @CacheEvict(value = "story", allEntries = true)
     public void unlikeStory(String userId, String storyId) {
         log.info("User {} attempting to unlike story {}", userId, storyId);
         
@@ -1006,21 +1008,68 @@ public class StoryService {
     }
 
     public void incrementViewCount(String storyId) {
-        Story story = storyRepository.findById(storyId)
-                .orElseThrow(() -> new RuntimeException("Story not found with ID: " + storyId));
-        
-        if (story.getViewCount() == null) {
-            story.setViewCount(1L);
-        } else {
-            story.setViewCount(story.getViewCount() + 1);
-        }
-        
-        storyRepository.save(story);
+        Query query = Query.query(Criteria.where("id").is(storyId));
+        Update update = new Update().inc("viewCount", 1);
+        mongoTemplate.updateFirst(query, update, Story.class);
         log.debug("View count incremented for story: {}", storyId);
         
-        // Check for views milestone reward
+        // Check for views milestone reward (async-safe: reads after update)
         RewardService rewardService = ApplicationContextProvider.getBean(RewardService.class);
         rewardService.checkViewsMilestoneReward(storyId);
+    }
+
+    /**
+     * Async view count increment — removes synchronous MongoDB write from read path.
+     * Fire-and-forget from controller after returning story response.
+     */
+    /**
+     * Async view count — increments in Redis; batched flush to MongoDB every 60s.
+     */
+    @Async("storyOpsExecutor")
+    public void incrementViewCountAsync(String storyId) {
+        viewCountBatchService.incrementInRedis(storyId);
+    }
+
+    /**
+     * Get latest stories with cursor-based pagination (efficient for deep pages).
+     * Pass cursor from previous response's nextCursor. Size+1 fetched to determine hasMore.
+     */
+    public PagedResponse<StoryResponse> getLatestStoriesWithCursor(String currentUserId, String cursor, int size) {
+        java.time.LocalDateTime before = cursor != null && !cursor.isBlank()
+                ? java.time.LocalDateTime.parse(cursor) : null;
+        if (before == null) {
+            List<Story> stories = storyRepository.findByStatusOrderByCreatedAtDesc(
+                    Story.StoryStatus.ACTIVE, PageRequest.of(0, size + 1)).getContent();
+            return buildCursorResponse(stories, size, currentUserId, true);
+        }
+        List<Story> stories = storyRepository.findByStatusAndCreatedAtBeforeOrderByCreatedAtDesc(
+                Story.StoryStatus.ACTIVE, before, PageRequest.of(0, size + 1));
+        return buildCursorResponse(stories, size, currentUserId, true);
+    }
+
+    private PagedResponse<StoryResponse> buildCursorResponse(List<Story> stories, int size,
+            String currentUserId, boolean withUserContext) {
+        boolean hasMore = stories.size() > size;
+        List<Story> pageStories = hasMore ? stories.subList(0, size) : stories;
+        String nextCursor = hasMore && !pageStories.isEmpty()
+                ? pageStories.get(pageStories.size() - 1).getCreatedAt().toString()
+                : null;
+        List<StoryResponse> responses = pageStories.stream()
+                .map(s -> toStoryResponse(s, currentUserId, withUserContext))
+                .collect(Collectors.toList());
+        return PagedResponse.ofWithCursor(responses, size, nextCursor);
+    }
+
+    private StoryResponse toStoryResponse(Story story, String userId, boolean withContext) {
+        User user = userService.getUserEntityById(story.getUserId());
+        if (withContext && userId != null) {
+            boolean likedByMe = likeService.isLiked(userId, story.getId());
+            boolean bookmarkedByMe = bookmarkService.isBookmarked(userId, story.getId());
+            return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe,
+                    getLikeCount(story.getId()), getCommentCount(story.getId()));
+        }
+        return StoryResponse.fromStory(story, user, false, false,
+                getLikeCount(story.getId()), getCommentCount(story.getId()));
     }
 
     /**

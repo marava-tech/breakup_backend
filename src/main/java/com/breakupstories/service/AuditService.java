@@ -9,6 +9,7 @@ import com.breakupstories.repository.AuditRepository;
 import com.breakupstories.repository.StoryRepository;
 import com.breakupstories.util.TimestampUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -109,17 +110,59 @@ public class AuditService {
         );
         logAudit(userId, Audit.EntityType.STORY, Audit.ActionType.VIEW, storyId, userAgent, ipAddress, sessionId, metadata);
     }
+
+    /**
+     * Async story view logging — removes synchronous MongoDB write from read path.
+     */
+    @Async("storyOpsExecutor")
+    public void logStoryViewAsync(String userId, String storyId, String userAgent, String ipAddress, String sessionId, boolean isOwnStory) {
+        try {
+            logStoryView(userId, storyId, userAgent, ipAddress, sessionId, isOwnStory);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(AuditService.class).warn("Async audit log failed for story view: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Async story view logging for unauthenticated users (by IP).
+     */
+    @Async("storyOpsExecutor")
+    public void logStoryViewByIPAsync(String ipAddress, String storyId, String userAgent, String sessionId) {
+        try {
+            logStoryViewByIP(ipAddress, storyId, userAgent, sessionId);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(AuditService.class).warn("Async audit log failed for story view by IP: {}", e.getMessage());
+        }
+    }
     
     public void logStoryLike(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
         Map<String, Object> metadata = Map.of("interaction_type", "story_like");
         logAudit(userId, Audit.EntityType.STORY, Audit.ActionType.LIKE, storyId, userAgent, ipAddress, sessionId, metadata);
     }
-    
+
+    @Async("storyOpsExecutor")
+    public void logStoryLikeAsync(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
+        try {
+            logStoryLike(userId, storyId, userAgent, ipAddress, sessionId);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(AuditService.class).warn("Async audit log failed for story like: {}", e.getMessage());
+        }
+    }
+
     public void logStoryUnlike(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
         Map<String, Object> metadata = Map.of("interaction_type", "story_unlike");
         logAudit(userId, Audit.EntityType.STORY, Audit.ActionType.UNLIKE, storyId, userAgent, ipAddress, sessionId, metadata);
     }
-    
+
+    @Async("storyOpsExecutor")
+    public void logStoryUnlikeAsync(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
+        try {
+            logStoryUnlike(userId, storyId, userAgent, ipAddress, sessionId);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(AuditService.class).warn("Async audit log failed for story unlike: {}", e.getMessage());
+        }
+    }
+
     public void logCommentCreate(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
         Map<String, Object> metadata = Map.of(
             "interaction_type", "comment_create",
@@ -127,19 +170,44 @@ public class AuditService {
         );
         logAudit(userId, Audit.EntityType.COMMENT, Audit.ActionType.CREATE, storyId, userAgent, ipAddress, sessionId, metadata);
     }
-    
 
-    
+    @Async("storyOpsExecutor")
+    public void logCommentCreateAsync(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
+        try {
+            logCommentCreate(userId, storyId, userAgent, ipAddress, sessionId);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(AuditService.class).warn("Async audit log failed for comment create: {}", e.getMessage());
+        }
+    }
+
     public void logBookmarkCreate(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
         Map<String, Object> metadata = Map.of("interaction_type", "bookmark_create");
         logAudit(userId, Audit.EntityType.BOOKMARK, Audit.ActionType.CREATE, storyId, userAgent, ipAddress, sessionId, metadata);
     }
-    
+
+    @Async("storyOpsExecutor")
+    public void logBookmarkCreateAsync(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
+        try {
+            logBookmarkCreate(userId, storyId, userAgent, ipAddress, sessionId);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(AuditService.class).warn("Async audit log failed for bookmark create: {}", e.getMessage());
+        }
+    }
+
     public void logBookmarkDelete(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
         Map<String, Object> metadata = Map.of("interaction_type", "bookmark_delete");
         logAudit(userId, Audit.EntityType.BOOKMARK, Audit.ActionType.DELETE, storyId, userAgent, ipAddress, sessionId, metadata);
     }
-    
+
+    @Async("storyOpsExecutor")
+    public void logBookmarkDeleteAsync(String userId, String storyId, String userAgent, String ipAddress, String sessionId) {
+        try {
+            logBookmarkDelete(userId, storyId, userAgent, ipAddress, sessionId);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(AuditService.class).warn("Async audit log failed for bookmark delete: {}", e.getMessage());
+        }
+    }
+
     public PagedResponse<AuditResponse> getAudits(int page, int size, String sortBy, String sortOrder) {
         // Create pageable with sorting
         Sort.Direction direction = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;

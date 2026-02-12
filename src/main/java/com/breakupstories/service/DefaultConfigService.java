@@ -17,6 +17,8 @@ import com.breakupstories.repository.WithdrawalRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -39,6 +41,7 @@ public class DefaultConfigService {
     private final BannedDeviceService bannedDeviceService;
     private static final Logger log = LoggerFactory.getLogger(DefaultConfigService.class);
 
+    @CacheEvict(value = {"app-config", "user-config", "device-config", "languages"}, allEntries = true)
     public DefaultConfigResponse create(DefaultConfigRequest request) {
         if (defaultConfigRepository.existsByKey(request.getKey())) {
             throw new RuntimeException("Config with key already exists: " + request.getKey());
@@ -52,6 +55,7 @@ public class DefaultConfigService {
         return DefaultConfigResponse.fromEntity(defaultConfigRepository.save(config));
     }
 
+    @CacheEvict(value = {"app-config", "user-config", "device-config", "languages"}, allEntries = true)
     public DefaultConfigResponse update(String id, DefaultConfigRequest request) {
         DefaultConfig config = defaultConfigRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Config not found: " + id));
@@ -62,6 +66,7 @@ public class DefaultConfigService {
         return DefaultConfigResponse.fromEntity(defaultConfigRepository.save(config));
     }
 
+    @CacheEvict(value = {"app-config", "user-config", "device-config", "languages"}, allEntries = true)
     public void delete(String id) {
         if (!defaultConfigRepository.existsById(id)) {
             throw new RuntimeException("Config not found: " + id);
@@ -130,6 +135,7 @@ public class DefaultConfigService {
      *
      * @return List of language strings
      */
+    @Cacheable(value = "languages", key = "'all'")
     public List<String> getLanguages() {
         try {
             DefaultConfig languagesConfig = defaultConfigRepository.findByKey("languages")
@@ -677,6 +683,7 @@ public class DefaultConfigService {
      * 
      * @return AppConfigResponse containing app-level configuration settings
      */
+    @Cacheable(value = "app-config", key = "'global'")
     public AppConfigResponse getAppConfigs() {
         try {
             // Get all app_config_ prefixed configurations
@@ -738,6 +745,7 @@ public class DefaultConfigService {
      * @param userId The user ID to get configurations for
      * @return UserConfigResponse containing user-specific configuration and eligibility data
      */
+    @Cacheable(value = "user-config", key = "#userId != null ? #userId : 'anonymous'")
     public UserConfigResponse getUserConfigs(String userId) {
         try {
             Map<String, Object> configMap = new HashMap<>();
@@ -779,6 +787,7 @@ public class DefaultConfigService {
      * @param deviceId The device ID to get configuration for
      * @return DeviceConfigResponse with device-specific information
      */
+    @Cacheable(value = "device-config", key = "#deviceId != null ? #deviceId : 'unknown'")
     public DeviceConfigResponse getDeviceConfigs(String deviceId) {
         try {
             log.info("Getting device configuration for device: {}", deviceId);

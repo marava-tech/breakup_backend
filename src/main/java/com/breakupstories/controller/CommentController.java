@@ -17,7 +17,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/comments")
@@ -48,12 +47,10 @@ public class CommentController {
         log.info("User {} adding comment to story {}", userId, request.getStoryId());
         CommentResponse response = commentService.createComment(userId, request);
         
-        // Audit comment creation
+        // Audit comment creation (async)
         ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
-        auditService.logCommentCreate(userId, request.getStoryId(),
-                                    clientInfo.getUserAgent(), clientInfo.getIpAddress(), 
-                                    clientInfo.getSessionId());
-        log.info("Audited comment creation for user {} on story {}", userId, request.getStoryId());
+        auditService.logCommentCreateAsync(userId, request.getStoryId(),
+                clientInfo.getUserAgent(), clientInfo.getIpAddress(), clientInfo.getSessionId());
         
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -66,53 +63,6 @@ public class CommentController {
             @RequestParam(defaultValue = "10") int size) {
         
         PagedResponse<CommentResponse> response = storyService.getStoryComments(storyId, page, size);
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/story/{storyId}/all")
-    @Operation(summary = "Get all comments for a story", description = "Get all comments for a story with nested replies (no pagination)")
-    public ResponseEntity<List<CommentResponse>> getAllStoryComments(@PathVariable String storyId) {
-        List<CommentResponse> response = storyService.getAllStoryComments(storyId);
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/story/{storyId}/count")
-    @Operation(summary = "Get comment count", description = "Get the total number of comments for a story")
-    public ResponseEntity<Long> getCommentCount(@PathVariable String storyId) {
-        long count = storyService.getCommentCount(storyId);
-        return ResponseEntity.ok(count);
-    }
-    
-    @GetMapping("/{commentId}")
-    @Operation(summary = "Get comment by ID", description = "Get a specific comment with all its replies")
-    public ResponseEntity<CommentResponse> getCommentById(@PathVariable String commentId) {
-        CommentResponse response = commentService.getCommentById(commentId);
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/{commentId}/replies")
-    @Operation(summary = "Get replies to a comment", description = "Get all replies to a specific comment")
-    public ResponseEntity<List<CommentResponse>> getCommentReplies(@PathVariable String commentId) {
-        List<CommentResponse> response = commentService.getRepliesByComment(commentId);
-        return ResponseEntity.ok(response);
-    }
-    
-    @PutMapping("/{commentId}")
-    @Operation(summary = "Update a comment", description = "Update a comment by the authenticated user")
-    public ResponseEntity<CommentResponse> updateComment(
-            @PathVariable String commentId,
-            @RequestBody CommentRequest request,
-            Authentication authentication) {
-        
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        
-        String email = authentication.getName();
-        String userId = userService.getUserEntityByEmail(email).getId();
-        
-        log.info("User {} updating comment {}", userId, commentId);
-        CommentResponse response = commentService.updateComment(commentId, userId, request);
         return ResponseEntity.ok(response);
     }
     
@@ -134,62 +84,4 @@ public class CommentController {
         return ResponseEntity.noContent().build();
     }
     
-    @GetMapping("/user/{userId}")
-    @Operation(summary = "Get user comments", description = "Get paginated comments by a specific user")
-    public ResponseEntity<PagedResponse<CommentResponse>> getUserComments(
-            @PathVariable String userId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        PagedResponse<CommentResponse> response = commentService.getCommentsByUser(userId, page, size);
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/abusive")
-    @Operation(summary = "Get abusive comments", description = "Get paginated abusive comments for moderation")
-    public ResponseEntity<PagedResponse<CommentResponse>> getAbusiveComments(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        PagedResponse<CommentResponse> response = commentService.getAbusiveComments(page, size);
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/abusive/category/{category}")
-    @Operation(summary = "Get comments by abuse category", description = "Get paginated comments by specific abuse category")
-    public ResponseEntity<PagedResponse<CommentResponse>> getCommentsByAbuseCategory(
-            @PathVariable String category,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        PagedResponse<CommentResponse> response = commentService.getCommentsByAbuseCategory(category, page, size);
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/abusive/statistics")
-    @Operation(summary = "Get abuse statistics", description = "Get statistics about abusive comments")
-    public ResponseEntity<java.util.Map<String, Object>> getAbuseStatistics() {
-        java.util.Map<String, Object> stats = commentService.getAbuseStatistics();
-        return ResponseEntity.ok(stats);
-    }
-    
-    @PostMapping("/{commentId}/flag")
-    @Operation(summary = "Flag comment as abusive", description = "Manually flag a comment as abusive (admin/moderator only)")
-    public ResponseEntity<Void> flagCommentAsAbusive(
-            @PathVariable String commentId,
-            @RequestParam String category,
-            @RequestParam String explanation,
-            @RequestParam Double confidence) {
-        
-        commentService.flagCommentAsAbusive(commentId, category, explanation,confidence);
-        return ResponseEntity.ok().build();
-    }
-    
-    @PostMapping("/{commentId}/unflag")
-    @Operation(summary = "Unflag comment as abusive", description = "Manually unflag a comment as abusive (admin/moderator only)")
-    public ResponseEntity<Void> unflagCommentAsAbusive(@PathVariable String commentId) {
-        
-        commentService.unflagCommentAsAbusive(commentId);
-        return ResponseEntity.ok().build();
-    }
 } 

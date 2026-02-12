@@ -8,6 +8,8 @@ import com.breakupstories.model.User;
 import com.breakupstories.repository.CommentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +31,7 @@ public class CommentService {
     private final UserService userService;
 
     
+    @CacheEvict(value = "comments", allEntries = true)
     public CommentResponse createComment(String userId, CommentRequest request) {
         log.info("User {} creating comment on story {}", userId, request.getStoryId());
         
@@ -62,6 +65,7 @@ public class CommentService {
      * @param size Page size
      * @return PagedResponse of comments with nested replies
      */
+    @Cacheable(value = "comments", key = "#storyId + ':' + #page + ':' + #size")
     public PagedResponse<CommentResponse> getCommentsByStory(String storyId, int page, int size) {
         log.info("Getting comments for story {} (page: {}, size: {})", storyId, page, size);
         
@@ -199,6 +203,7 @@ public class CommentService {
         return CommentResponse.fromComment(updatedComment, user);
     }
     
+    @CacheEvict(value = "comments", allEntries = true)
     public void deleteComment(String commentId, String userId) {
         log.info("User {} deleting comment {}", userId, commentId);
         

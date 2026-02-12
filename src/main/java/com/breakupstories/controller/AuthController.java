@@ -2,11 +2,9 @@ package com.breakupstories.controller;
 
 import com.breakupstories.dto.*;
 import com.breakupstories.exception.InvalidOTPException;
-import com.breakupstories.service.BannedDeviceService;
 import com.breakupstories.service.JwtService;
 import com.breakupstories.service.OTPService;
 import com.breakupstories.service.UserService;
-import com.breakupstories.service.RewardService;
 import com.breakupstories.service.DeviceMappingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,7 +28,6 @@ public class AuthController {
     private final UserService userService;
     private final JwtService jwtService;
     private final OTPService otpService;
-    private final RewardService rewardService;
     private final DeviceMappingService deviceMappingService;
     
     @PostMapping("/send-otp-registration")
@@ -160,21 +157,6 @@ public class AuthController {
         AuthResponse response = AuthResponse.of(newToken, user);
         
         log.info("Token refreshed successfully for user: {}", userDetails.getUsername());
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/device-referral-status/{deviceId}")
-    @Operation(summary = "Check device referral status", description = "Check if a device has already used a referral code (Public endpoint)")
-    public ResponseEntity<DeviceReferralStatusResponse> getDeviceReferralStatus(@PathVariable String deviceId) {
-        log.info("Device referral status request for device: {}", deviceId);
-        
-        boolean hasUsedReferral = rewardService.hasDeviceUsedReferral(deviceId);
-        
-        DeviceReferralStatusResponse response = DeviceReferralStatusResponse.builder()
-                .deviceId(deviceId)
-                .hasUsedReferral(hasUsedReferral)
-                .build();
-        
         return ResponseEntity.ok(response);
     }
 } 

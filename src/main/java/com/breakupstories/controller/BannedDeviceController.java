@@ -43,44 +43,6 @@ public class BannedDeviceController {
 
     
     /**
-     * Get banned device details
-     */
-    @GetMapping("/{deviceId}")
-    @Operation(summary = "Get banned device details", description = "Get details of a banned device including associated emails")
-    public ResponseEntity<BannedDeviceResponse> getBannedDevice(@PathVariable String deviceId) {
-        try {
-            BannedDeviceResponse response = bannedDeviceService.getBannedDevice(deviceId);
-            if (response != null) {
-                return ResponseEntity.ok(response);
-            } else {
-                return ResponseEntity.notFound().build();
-            }
-        } catch (Exception e) {
-            log.error("Error getting banned device {}: {}", deviceId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    
-    /**
-     * Get all banned devices with pagination
-     */
-    @GetMapping
-    @Operation(summary = "Get all banned devices", description = "Retrieve paginated list of all banned devices")
-    public ResponseEntity<PagedResponse<BannedDeviceResponse>> getAllBannedDevices(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortOrder) {
-        try {
-            PagedResponse<BannedDeviceResponse> response = bannedDeviceService.getAllBannedDevices(page, size, sortBy, sortOrder);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error getting all banned devices: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    
-    /**
      * Comprehensive search banned devices by device ID, reason, or email
      */
     @GetMapping("/search")
@@ -120,72 +82,6 @@ public class BannedDeviceController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Error searching banned devices: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    
-    /**
-     * Search banned devices by device ID only
-     */
-    @GetMapping("/search/device")
-    @Operation(summary = "Search banned devices by device ID", 
-               description = "Search banned devices by device ID (case-insensitive)")
-    public ResponseEntity<PagedResponse<BannedDeviceResponse>> searchBannedDevicesByDeviceId(
-            @RequestParam String deviceId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortOrder) {
-        try {
-            PagedResponse<BannedDeviceResponse> response = bannedDeviceService.searchBannedDevicesByDeviceId(
-                    deviceId, page, size, sortBy, sortOrder);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error searching banned devices by device ID '{}': {}", deviceId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    
-    /**
-     * Search banned devices by email only
-     */
-    @GetMapping("/search/email")
-    @Operation(summary = "Search banned devices by email", 
-               description = "Search banned devices by email (case-insensitive)")
-    public ResponseEntity<PagedResponse<BannedDeviceResponse>> searchBannedDevicesByEmail(
-            @RequestParam String email,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortOrder) {
-        try {
-            PagedResponse<BannedDeviceResponse> response = bannedDeviceService.searchBannedDevicesByEmail(
-                    email, page, size, sortBy, sortOrder);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error searching banned devices by email '{}': {}", email, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    
-    /**
-     * Search banned devices by reason only
-     */
-    @GetMapping("/search/reason")
-    @Operation(summary = "Search banned devices by reason", 
-               description = "Search banned devices by reason (case-insensitive)")
-    public ResponseEntity<PagedResponse<BannedDeviceResponse>> searchBannedDevicesByReason(
-            @RequestParam String reason,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortOrder) {
-        try {
-            PagedResponse<BannedDeviceResponse> response = bannedDeviceService.searchBannedDevicesByReason(
-                    reason, page, size, sortBy, sortOrder);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error searching banned devices by reason '{}': {}", reason, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

@@ -22,21 +22,11 @@ public class HealthController {
     private final long startTime = System.currentTimeMillis();
 
     /**
-     * Ping endpoint to check if the service is accessible
-     * @return Health status with timestamp
+     * Ping endpoint — no DB, no service calls. Returns instantly for app connectivity checks.
      */
     @GetMapping("/ping")
-    public ResponseEntity<Map<String, Object>> ping() {
-        log.info("Health check ping received");
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "OK");
-        response.put("message", "Service is running");
-        response.put("timestamp", LocalDateTime.now());
-        response.put("service", "Breakup Stories Backend");
-        response.put("version", "v1.0");
-        
-        return ResponseEntity.ok(response);
+    public ResponseEntity<Map<String, String>> ping() {
+        return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
     /**

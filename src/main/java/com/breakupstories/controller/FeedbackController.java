@@ -80,50 +80,6 @@ public class FeedbackController {
         return ResponseEntity.ok(response);
     }
     
-    @GetMapping("/types/{type}")
-    @Operation(summary = "Get feedbacks by type", description = "Retrieve paginated feedbacks by type (BUG_REPORT, FEATURE_REQUEST, etc.)")
-    public ResponseEntity<PagedResponse<FeedbackResponse>> getFeedbacksByType(
-            @PathVariable Feedback.FeedbackType type,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        PagedResponse<FeedbackResponse> response = feedbackService.getFeedbacksByType(type, page, size);
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/status/{status}")
-    @Operation(summary = "Get feedbacks by status", description = "Retrieve paginated feedbacks by status (PENDING, IN_REVIEW, etc.)")
-    public ResponseEntity<PagedResponse<FeedbackResponse>> getFeedbacksByStatus(
-            @PathVariable Feedback.FeedbackStatus status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        PagedResponse<FeedbackResponse> response = feedbackService.getFeedbacksByStatus(status, page, size);
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/story/{storyId}")
-    @Operation(summary = "Get feedbacks by story", description = "Retrieve paginated feedbacks for a specific story")
-    public ResponseEntity<PagedResponse<FeedbackResponse>> getFeedbacksByStory(
-            @PathVariable String storyId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        PagedResponse<FeedbackResponse> response = feedbackService.getFeedbacksByStory(storyId, page, size);
-        return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/user/{userId}")
-    @Operation(summary = "Get feedbacks by user", description = "Retrieve paginated feedbacks by a specific user")
-    public ResponseEntity<PagedResponse<FeedbackResponse>> getFeedbacksByUser(
-            @PathVariable String userId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        PagedResponse<FeedbackResponse> response = feedbackService.getFeedbacksByUser(userId, page, size);
-        return ResponseEntity.ok(response);
-    }
-    
     @GetMapping("/my-feedbacks")
     @Operation(summary = "Get my feedbacks", description = "Retrieve paginated feedbacks by the authenticated user")
     public ResponseEntity<PagedResponse<FeedbackResponse>> getMyFeedbacks(
@@ -136,43 +92,6 @@ public class FeedbackController {
         
         PagedResponse<FeedbackResponse> response = feedbackService.getFeedbacksByUser(userId, page, size);
         return ResponseEntity.ok(response);
-    }
-    
-    @GetMapping("/{feedbackId}")
-    @Operation(summary = "Get feedback by ID", description = "Retrieve a specific feedback by its ID")
-    public ResponseEntity<FeedbackResponse> getFeedbackById(@PathVariable String feedbackId) {
-        FeedbackResponse response = feedbackService.getFeedbackById(feedbackId);
-        return ResponseEntity.ok(response);
-    }
-    
-    @PutMapping("/{feedbackId}")
-    @Operation(summary = "Update feedback", description = "Update an existing feedback with optional file upload")
-    public ResponseEntity<FeedbackResponse> updateFeedback(
-            @PathVariable String feedbackId,
-            Authentication authentication,
-            MultipartHttpServletRequest request) {
-        
-        try {
-            String email = authentication.getName();
-            String userId = userService.getUserEntityByEmail(email).getId();
-            
-            // Extract feedback data from form data
-            String feedbackJson = request.getParameter("feedback");
-            FeedbackRequest feedbackRequest = objectMapper.readValue(feedbackJson, FeedbackRequest.class);
-            
-            // Handle file upload
-            String fileUrl = null;
-            MultipartFile file = request.getFile("file");
-            if (file != null && !file.isEmpty()) {
-                fileUrl  = uploadService.uploadSingleFile(file);
-            }
-            
-            FeedbackResponse response = feedbackService.updateFeedback(feedbackId, userId, feedbackRequest, fileUrl);
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
     }
     
     // Admin endpoints
@@ -196,16 +115,4 @@ public class FeedbackController {
         return ResponseEntity.ok(response);
     }
     
-    @DeleteMapping("/{feedbackId}")
-    @Operation(summary = "Delete feedback", description = "Delete a feedback by its ID")
-    public ResponseEntity<Void> deleteFeedback(
-            @PathVariable String feedbackId,
-            Authentication authentication) {
-        
-        String email = authentication.getName();
-        String userId = userService.getUserEntityByEmail(email).getId();
-        
-        feedbackService.deleteFeedback(feedbackId, userId);
-        return ResponseEntity.noContent().build();
-    }
 } 

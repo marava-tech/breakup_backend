@@ -27,4 +27,18 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    @Bean(name = "storyOpsExecutor")
+    public Executor storyOpsExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(5000);
+        executor.setThreadNamePrefix("StoryOps-");
+        executor.setRejectedExecutionHandler((r, executor1) -> {
+            log.warn("StoryOps task rejected, dropping non-critical operation");
+        });
+        executor.initialize();
+        return executor;
+    }
 }

@@ -2,6 +2,7 @@ package com.breakupstories.config;
 
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
+import com.mongodb.ReadPreference;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,6 +46,9 @@ public class MongoConfig {
     @Value("${spring.data.mongodb.authentication-database:admin}")
     private String authenticationDatabase;
 
+    @Value("${spring.data.mongodb.read-preference:primary}")
+    private String readPreference;
+
     @Bean
     @Primary
     public MongoClient mongoClient() {
@@ -67,9 +71,12 @@ public class MongoConfig {
         connectionString.append("&connectTimeoutMS=30000");
         connectionString.append("&socketTimeoutMS=30000");
         
-        MongoClientSettings settings = MongoClientSettings.builder()
-                .applyConnectionString(new ConnectionString(connectionString.toString()))
-                .build();
+        MongoClientSettings.Builder builder = MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(connectionString.toString()));
+        if ("secondaryPreferred".equalsIgnoreCase(readPreference)) {
+            builder.readPreference(ReadPreference.secondaryPreferred());
+        }
+        MongoClientSettings settings = builder.build();
         
         return MongoClients.create(settings);
     }

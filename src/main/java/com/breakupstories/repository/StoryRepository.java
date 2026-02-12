@@ -24,6 +24,13 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     Page<Story> findByStatusOrderByViewCountDesc(Story.StoryStatus status, Pageable pageable);
     
     Page<Story> findByStatusOrderByCreatedAtDesc(Story.StoryStatus status, Pageable pageable);
+
+    /** Cursor-based pagination — efficient for deep pages. */
+    List<Story> findByStatusAndCreatedAtBeforeOrderByCreatedAtDesc(
+            Story.StoryStatus status, java.time.LocalDateTime createdAtBefore, Pageable pageable);
+
+    List<Story> findByLanguageAndStatusAndCreatedAtBeforeOrderByCreatedAtDesc(
+            String language, Story.StoryStatus status, java.time.LocalDateTime createdAtBefore, Pageable pageable);
     
     Page<Story> findByLanguageAndStatus(String language, Story.StoryStatus status, Pageable pageable);
     

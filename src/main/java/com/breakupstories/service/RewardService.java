@@ -16,6 +16,8 @@ import com.breakupstories.dto.RewardConfigResponse;
 import com.breakupstories.model.Feedback;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -67,6 +69,7 @@ public class RewardService {
      * Backward compatible: Old coin history records without invalidate/refund fields
      * are automatically included in the total calculation.
      */
+    @Cacheable(value = "coin-balance", key = "#userId")
     public CoinBalanceResponse getCoinBalance(String userId) {
         List<CoinHistory> coinHistory = coinHistoryRepository.findByUserId(userId);
         coinHistory = coinHistory.stream().sorted(Comparator.comparingLong(CoinHistory::getCreatedAt).reversed()).toList();
@@ -84,13 +87,15 @@ public class RewardService {
     /**
      * Add coins to user's balance
      */
+    @CacheEvict(value = "coin-balance", key = "#userId")
     public void addCoins(String userId, int count, String reason, String relatedEntityId) {
         addCoins(userId, count, reason, relatedEntityId, null);
     }
-    
+
     /**
      * Add coins to user's balance with entity type
      */
+    @CacheEvict(value = "coin-balance", key = "#userId")
     public void addCoins(String userId, int count, String reason, String relatedEntityId, CoinHistoryEntityType relatedEntityType) {
         // Check if user already received this reward
         if (relatedEntityId != null && 
@@ -117,6 +122,7 @@ public class RewardService {
     /**
      * Deduct coins from user's balance
      */
+    @CacheEvict(value = "coin-balance", key = "#userId")
     public void deductCoins(String userId, int count, String reason) {
         // Check if user has enough valid coins
         int availableCoins = getValidTotalCoins(userId);
@@ -323,6 +329,7 @@ public class RewardService {
     /**
      * Invalidate a coin history entry
      */
+    @CacheEvict(value = "coin-balance", allEntries = true)
     public void invalidateCoinHistory(String coinHistoryId, String invalidationReason, Boolean refund) {
         CoinHistory coinHistory = coinHistoryRepository.findById(coinHistoryId)
                 .orElseThrow(() -> new RuntimeException("Coin history not found with ID: " + coinHistoryId));

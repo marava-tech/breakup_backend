@@ -1,6 +1,10 @@
 spring:
   application:
     name: breakup-stories-api
+  # Virtual threads (requires Java 21+). Enable when upgraded from Java 17.
+  threads:
+    virtual:
+      enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:false}
 
   # Timezone configuration for Indian Standard Time
   # Jackson configuration is handled in JacksonConfig.java
@@ -22,9 +26,20 @@ spring:
       username: ${SPRING_DATA_MONGODB_USERNAME:${MONGO_ROOT_USERNAME:madhu}}
       password: ${SPRING_DATA_MONGODB_PASSWORD:${MONGO_ROOT_PASSWORD:Marava@Technologies@7814}}
       authentication-database: ${SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE:admin}
-      auto-index-creation: true
+      auto-index-creation: false
+      # Set to secondaryPreferred when using MongoDB replica set (offloads reads to secondaries)
+      read-preference: ${SPRING_DATA_MONGODB_READ_PREFERENCE:primary}
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 2
 
-  
   # Gmail SMTP configuration for OTP emails
   mail:
     host: ${BREAKUP_MAIL_HOST:smtp.gmail.com}
@@ -48,6 +63,10 @@ server:
   port: 8080
   servlet:
     context-path: /
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain
+    min-response-size: 1024
 
 # JWT Configuration
 jwt:

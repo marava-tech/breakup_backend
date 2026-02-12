@@ -5,7 +5,6 @@ import com.breakupstories.dto.DefaultConfigRequest;
 import com.breakupstories.dto.DefaultConfigResponse;
 import com.breakupstories.dto.DeviceConfigResponse;
 import com.breakupstories.dto.PagedResponse;
-import com.breakupstories.dto.StoryCreationConfigResponse;
 import com.breakupstories.dto.UserConfigResponse;
 import com.breakupstories.service.DefaultConfigService;
 import com.breakupstories.service.UploadService;
@@ -60,14 +59,6 @@ public class DefaultConfigController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    @Operation(summary = "Get config by ID")
-    public ResponseEntity<DefaultConfigResponse> getById(@PathVariable String id) {
-        return ResponseEntity.ok(defaultConfigService.getById(id));
-    }
-
-    
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Search configs by key containing search term with pagination", 
@@ -111,52 +102,6 @@ public class DefaultConfigController {
     @Operation(summary = "Get list of available languages")
     public ResponseEntity<List<String>> getLanguages() {
         return ResponseEntity.ok(defaultConfigService.getLanguages());
-    }
-
-    @GetMapping("/by-prefix")
-    @Operation(summary = "Get configuration settings by prefix", 
-               description = "Retrieve all configuration settings with a specific prefix for UI control and restrictions")
-    public ResponseEntity<AppConfigResponse> getConfigurationsByPrefix(
-            @RequestParam String configPrefix) {
-        try {
-            AppConfigResponse response = defaultConfigService.getConfigurationsByPrefix(configPrefix);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error retrieving configurations with prefix '{}': {}", configPrefix, e.getMessage(), e);
-            AppConfigResponse errorResponse = AppConfigResponse.builder()
-                    .configs(Map.of())
-                    .totalConfigs(0)
-                    .message("Failed to retrieve configurations for prefix '" + configPrefix + "': " + e.getMessage())
-                    .build();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-        }
-    }
-
-    @GetMapping("/story-creation-config")
-    @Operation(summary = "Get story creation configuration", 
-               description = "Get all story creation configuration settings with parsed values and user eligibility information")
-    public ResponseEntity<StoryCreationConfigResponse> getStoryCreationConfig(
-            Authentication authentication) {
-        try {
-            String userId = null;
-            
-            // Get user ID if authenticated
-            if (authentication != null && authentication.isAuthenticated()) {
-                String email = authentication.getName();
-                userId = userService.getUserEntityByEmail(email).getId();
-            }
-            
-            StoryCreationConfigResponse response = defaultConfigService.getStoryCreationConfig(userId);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error retrieving story creation configuration: {}", e.getMessage(), e);
-            StoryCreationConfigResponse errorResponse = StoryCreationConfigResponse.builder()
-                    .configs(Map.of())
-                    .totalConfigs(0)
-                    .message("Error retrieving story creation configuration: " + e.getMessage())
-                    .build();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-        }
     }
 
     @GetMapping("/app-configs")
@@ -259,39 +204,6 @@ public class DefaultConfigController {
             // Log the error for debugging
             log.error("Error in uploadFileAndSaveConfig: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    @GetMapping("/verify-startup-data")
-    public ResponseEntity<Map<String, Object>> verifyStartupData() {
-        try {
-            Map<String, Object> response = new HashMap<>();
-            
-            // Check default story images
-            List<String> storyImages = defaultConfigService.getDefaultStoryImages();
-            response.put("defaultStoryImages", storyImages);
-            response.put("storyImageCount", storyImages.size());
-            
-            // Check default thumbnail
-            String defaultThumbnail = defaultConfigService.getDefaultThumbnailUrl();
-            response.put("defaultThumbnail", defaultThumbnail);
-            
-            // Check languages
-            List<String> languages = defaultConfigService.getLanguages();
-            response.put("languages", languages);
-            response.put("languageCount", languages.size());
-            
-            response.put("success", true);
-            response.put("message", "Startup data verification completed");
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", e.getMessage());
-            response.put("message", "Failed to verify startup data");
-            
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 
