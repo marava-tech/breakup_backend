@@ -4,6 +4,7 @@ import com.breakupstories.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -37,15 +38,37 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // Infrastructure
                         .requestMatchers("/api/health/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**").permitAll()
-                        .requestMatchers("/api/stories").permitAll()
                         .requestMatchers("/api/configs/device-configs").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
+
+                        // Stories — public reads (my-stories must come before the wildcard)
+                        .requestMatchers(HttpMethod.GET, "/api/stories/my-stories").authenticated()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/stories",
+                                "/api/stories/type",
+                                "/api/stories/search",
+                                "/api/stories/*").permitAll()
+
+                        // Stories — auth required for writes
+                        .requestMatchers(HttpMethod.POST, "/api/stories", "/api/stories/written").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/stories/*/like").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/stories/*/like").authenticated()
+
+                        // Comments — public reads, auth required for writes
+                        .requestMatchers(HttpMethod.GET, "/api/comments/story/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/comments").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/comments/**").authenticated()
+
+                        // Admin
                         .requestMatchers("/api/audits/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+
+                        // User-specific
                         .requestMatchers("/api/configs/**").authenticated()
                         .requestMatchers("/api/users/profile").authenticated()
                         .requestMatchers("/api/users/profile-image").authenticated()

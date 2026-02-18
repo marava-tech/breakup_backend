@@ -27,10 +27,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import com.breakupstories.service.TrendingCacheService;
+import org.bson.Document;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
+import org.springframework.data.mongodb.core.aggregation.LimitOperation;
+import org.springframework.data.mongodb.core.aggregation.MatchOperation;
+import org.springframework.data.mongodb.core.aggregation.SkipOperation;
+import org.springframework.data.mongodb.core.aggregation.SortOperation;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
@@ -559,49 +567,95 @@ public class StoryService {
     }
 
 
-    //take story id
-    public PagedResponse<StoryResponse> getSimilarStories(String currentUserId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByStatusOrderByViewCountDesc(Story.StoryStatus.ACTIVE, pageable);
-
-        List<StoryResponse> stories = storyPage.getContent().stream()
-                .map(story -> {
-                    User user = userService.getUserEntityById(story.getUserId());
-                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
-                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
-                    long likeCount = getLikeCount(story.getId());
-                    long commentCount = getCommentCount(story.getId());
-                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
-                })
-                .collect(Collectors.toList());
-
-        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
-    }
-    
     /**
-     * Get similar stories by language sorted by view count (for authenticated users)
-     * @param language The language to filter by
-     * @param currentUserId The current user ID
-     * @param page Page number
-     * @param size Page size
-     * @return PagedResponse of similar stories in the specified language with user context
+     * Returns stories similar to the given story, ranked by tag-overlap score then viewCount.
+     * Falls back to trending if the source story has no tags.
      */
-    public PagedResponse<StoryResponse> getSimilarStoriesByLanguage(String language, String currentUserId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByViewCountDesc(language, Story.StoryStatus.ACTIVE, pageable);
+    @Cacheable(value = "stories-type", key = "'SIMILAR:' + #storyId + ':' + (#currentUserId != null ? #currentUserId : 'anon') + ':' + #page + ':' + #size")
+    public PagedResponse<StoryResponse> getSimilarStories(String storyId, String currentUserId, int page, int size) {
+        Story source = storyRepository.findById(storyId).orElse(null);
+        if (source == null || source.getTags() == null || source.getTags().isEmpty()) {
+            return getTrendingStories(currentUserId, page, size);
+        }
 
-        List<StoryResponse> stories = storyPage.getContent().stream()
-                .map(story -> {
-                    User user = userService.getUserEntityById(story.getUserId());
-                    boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
-                    boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
-                    long likeCount = getLikeCount(story.getId());
-                    long commentCount = getCommentCount(story.getId());
-                    return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount, commentCount);
-                })
+        List<String> sourceTags = source.getTags();
+
+        // Stage 1: narrow to ACTIVE stories sharing ≥1 tag (uses compound index)
+        MatchOperation matchOp = Aggregation.match(
+                Criteria.where("status").is(Story.StoryStatus.ACTIVE)
+                        .and("_id").ne(storyId)
+                        .and("tags").in(sourceTags));
+
+        // Stage 2: tagScore = |intersection(story.tags, sourceTags)|
+        AggregationOperation addTagScore = ctx -> new Document("$addFields",
+                new Document("tagScore", new Document("$size",
+                        new Document("$ifNull", Arrays.asList(
+                                new Document("$setIntersection", Arrays.asList("$tags", sourceTags)),
+                                Collections.emptyList())))));
+
+        // Stage 3: highest tag overlap first, break ties by popularity
+        SortOperation sortOp = Aggregation.sort(
+                Sort.by(Sort.Direction.DESC, "tagScore")
+                        .and(Sort.by(Sort.Direction.DESC, "viewCount")));
+
+        SkipOperation skipOp = Aggregation.skip((long) page * size);
+        LimitOperation limitOp = Aggregation.limit(size);
+
+        List<Story> results = mongoTemplate.aggregate(
+                Aggregation.newAggregation(matchOp, addTagScore, sortOp, skipOp, limitOp),
+                "stories", Story.class).getMappedResults();
+
+        long total = storyRepository.countSimilarByTags(storyId, sourceTags);
+
+        List<StoryResponse> responses = results.stream()
+                .map(s -> toStoryResponse(s, currentUserId, currentUserId != null))
                 .collect(Collectors.toList());
 
-        return PagedResponse.of(stories, page, size, storyPage.getTotalElements());
+        return PagedResponse.of(responses, page, size, total);
+    }
+
+    /**
+     * Same as getSimilarStories but restricts candidates to a specific language.
+     */
+    @Cacheable(value = "stories-type", key = "'SIMILAR:' + #storyId + ':lang:' + #language + ':' + (#currentUserId != null ? #currentUserId : 'anon') + ':' + #page + ':' + #size")
+    public PagedResponse<StoryResponse> getSimilarStoriesByLanguage(String storyId, String language, String currentUserId, int page, int size) {
+        Story source = storyRepository.findById(storyId).orElse(null);
+        if (source == null || source.getTags() == null || source.getTags().isEmpty()) {
+            return getTrendingStoriesByLanguage(language, currentUserId, page, size);
+        }
+
+        List<String> sourceTags = source.getTags();
+
+        MatchOperation matchOp = Aggregation.match(
+                Criteria.where("status").is(Story.StoryStatus.ACTIVE)
+                        .and("_id").ne(storyId)
+                        .and("language").is(language)
+                        .and("tags").in(sourceTags));
+
+        AggregationOperation addTagScore = ctx -> new Document("$addFields",
+                new Document("tagScore", new Document("$size",
+                        new Document("$ifNull", Arrays.asList(
+                                new Document("$setIntersection", Arrays.asList("$tags", sourceTags)),
+                                Collections.emptyList())))));
+
+        SortOperation sortOp = Aggregation.sort(
+                Sort.by(Sort.Direction.DESC, "tagScore")
+                        .and(Sort.by(Sort.Direction.DESC, "viewCount")));
+
+        SkipOperation skipOp = Aggregation.skip((long) page * size);
+        LimitOperation limitOp = Aggregation.limit(size);
+
+        List<Story> results = mongoTemplate.aggregate(
+                Aggregation.newAggregation(matchOp, addTagScore, sortOp, skipOp, limitOp),
+                "stories", Story.class).getMappedResults();
+
+        long total = storyRepository.countSimilarByTagsAndLanguage(storyId, sourceTags, language);
+
+        List<StoryResponse> responses = results.stream()
+                .map(s -> toStoryResponse(s, currentUserId, currentUserId != null))
+                .collect(Collectors.toList());
+
+        return PagedResponse.of(responses, page, size, total);
     }
 
 

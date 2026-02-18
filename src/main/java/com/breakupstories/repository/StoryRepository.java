@@ -73,10 +73,19 @@ public interface StoryRepository extends MongoRepository<Story, String> {
     
     // Find stories by tags (any tag in the list)
     List<Story> findByTagsIn(List<String> tags);
-    
+
     // Find stories by tags (all tags must be present)
     @Query("{'tags': {$all: ?0}}")
     List<Story> findByTagsContainingAll(List<String> tags);
+
+    // Count active stories that share at least one tag (used for similar-stories pagination).
+    // Recommended index: db.stories.createIndex({ status:1, tags:1, viewCount:-1 })
+    @Query(value = "{'status': 'ACTIVE', '_id': {'$ne': ?0}, 'tags': {'$in': ?1}}", count = true)
+    long countSimilarByTags(String excludeId, List<String> tags);
+
+    // Count active stories that share at least one tag within a specific language
+    @Query(value = "{'status': 'ACTIVE', '_id': {'$ne': ?0}, 'language': ?2, 'tags': {'$in': ?1}}", count = true)
+    long countSimilarByTagsAndLanguage(String excludeId, List<String> tags, String language);
     
     // Find stories by story IDs and status
     List<Story> findByIdInAndStatus(List<String> storyIds, Story.StoryStatus status);

@@ -133,20 +133,28 @@ public class StoryController {
             Authentication authentication) {
         
         PagedResponse<StoryResponse> response;
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new RuntimeException("login required");
-        }
-        String email = authentication.getName();
-        User user = userService.getUserEntityByEmail(email);
-        String userId = user.getId();
-        String filterLanguage = (language != null && !language.trim().isEmpty()) ? language : user.getPreferredStoryLanguage();
-        
-        if (cursor != null && !cursor.isBlank()) {
-            response = storyService.getLatestStoriesWithCursor(userId, cursor, size);
-        } else if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
-            response = storyService.getStoriesByLanguage(filterLanguage, userId, page, size);
+        if (authentication != null && authentication.isAuthenticated()) {
+            String email = authentication.getName();
+            User user = userService.getUserEntityByEmail(email);
+            String userId = user.getId();
+            String filterLanguage = (language != null && !language.trim().isEmpty()) ? language : user.getPreferredStoryLanguage();
+
+            if (cursor != null && !cursor.isBlank()) {
+                response = storyService.getLatestStoriesWithCursor(userId, cursor, size);
+            } else if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                response = storyService.getStoriesByLanguage(filterLanguage, userId, page, size);
+            } else {
+                response = storyService.getStories(userId, page, size);
+            }
         } else {
-            response = storyService.getStories(userId, page, size);
+            // unauthenticated — serve without personalization
+            if (cursor != null && !cursor.isBlank()) {
+                response = storyService.getLatestStoriesWithCursor(null, cursor, size);
+            } else if (language != null && !language.trim().isEmpty()) {
+                response = storyService.getStoriesByLanguage(language, page, size);
+            } else {
+                response = storyService.getStories(page, size);
+            }
         }
         return ResponseEntity.ok(response);
     }
@@ -194,10 +202,17 @@ public class StoryController {
                     }
                 }
                 case SIMILAR -> {
-                    if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
-                        response = storyService.getSimilarStoriesByLanguage(filterLanguage, userId, page, size);
+                    if (storyId == null || storyId.isBlank()) {
+                        // no source story — fall back to trending
+                        if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                            response = storyService.getTrendingStoriesByLanguage(filterLanguage, userId, page, size);
+                        } else {
+                            response = storyService.getTrendingStories(userId, page, size);
+                        }
+                    } else if (filterLanguage != null && !filterLanguage.trim().isEmpty()) {
+                        response = storyService.getSimilarStoriesByLanguage(storyId, filterLanguage, userId, page, size);
                     } else {
-                        response = storyService.getSimilarStories(userId, page, size);
+                        response = storyService.getSimilarStories(storyId, userId, page, size);
                     }
                 }
                 case LATEST -> {

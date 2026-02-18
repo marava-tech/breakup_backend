@@ -2,8 +2,10 @@ package com.breakupstories.service;
 
 import com.breakupstories.exception.EmailSendException;
 import com.breakupstories.exception.InvalidOTPException;
+import com.breakupstories.util.TotpUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +20,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class OTPServiceImpl implements OTPService {
 
     private final GmailSender gmailSender;
+
+    @Value("${admin.email}")
+    private String adminEmail;
+
+    @Value("${admin.totp-secret}")
+    private String adminTotpSecret;
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final ConcurrentHashMap<String, Long> otpExpiryMap = new ConcurrentHashMap<>();
@@ -102,17 +110,27 @@ public class OTPServiceImpl implements OTPService {
 
     @Override
     public boolean sendOtp(String email) {
+        // Prepare email for comparison
+        String normalizedEmail = email != null ? email.trim() : "";
+
+        // Admin Auth Flow: Skip sending email, rely on TOTP
+        if (normalizedEmail.equalsIgnoreCase(adminEmail)) {
+            log.info("Admin login attempt for email: {}. Skipping email OTP, expecting TOTP.", email);
+            return true;
+        }
+
         // Special exception for testing email - bypass OTP sending
-        if ("hollypoter5@gmail.com".equals(email)) {
+        if ("hollypoter5@gmail.com".equals(normalizedEmail)) {
             log.info("Bypassing OTP sending for testing email: {}", email);
             return true;
         }
-        
+
         var otp = generateOtp();
         emailOtpMap.put(email, otp);
         try {
             var gmailContent = getUnFormattedGmailContent();
-            var formattedGmailContent = String.format(gmailContent, otp, TimestampUtil.currentLocalDateTime().getYear());
+            var formattedGmailContent = String.format(gmailContent, otp,
+                    TimestampUtil.currentLocalDateTime().getYear());
             gmailSender.sendGmail(email, "Breakup Stories Verification OTP", formattedGmailContent);
             log.info("Successfully sent OTP to email: {}", email);
             return true;
@@ -127,18 +145,33 @@ public class OTPServiceImpl implements OTPService {
 
     @Override
     public boolean verifyOtp(String email, String providedOtp) {
+        String normalizedEmail = email != null ? email.trim() : "";
+
+        // Admin Auth Flow: Verify TOTP
+        if (normalizedEmail.equalsIgnoreCase(adminEmail)) {
+            log.info("Verifying TOTP for admin: {}", email);
+            boolean isValid = TotpUtil.verify(adminTotpSecret, providedOtp);
+            if (isValid) {
+                log.info("Admin TOTP verified successfully.");
+                return true;
+            } else {
+                log.warn("Invalid TOTP provided for admin: {}", email);
+                throw new InvalidOTPException("Invalid Authenticator Code");
+            }
+        }
+
         // Special exception for testing email - bypass OTP verification
-        if ("hollypoter5@gmail.com".equals(email)) {
+        if ("hollypoter5@gmail.com".equals(normalizedEmail)) {
             log.info("Bypassing OTP verification for testing email: {}", email);
             return true;
         }
-        
+
         try {
             String storedOtp = emailOtpMap.get(email);
             if (storedOtp == null) {
                 throw new InvalidOTPException("No OTP found for email: " + email);
             }
-            
+
             Long expiryTime = otpExpiryMap.get(storedOtp);
             if (expiryTime != null && TimestampUtil.currentEpochMillis() > expiryTime) {
                 // Remove expired OTP
@@ -146,7 +179,7 @@ public class OTPServiceImpl implements OTPService {
                 otpExpiryMap.remove(storedOtp);
                 throw new InvalidOTPException("OTP has expired for email: " + email);
             }
-            
+
             if (storedOtp.equals(providedOtp)) {
                 // Remove the OTP after successful verification
                 emailOtpMap.remove(email);
@@ -179,4 +212,4 @@ public class OTPServiceImpl implements OTPService {
             }
         }
     }
-} 
+}

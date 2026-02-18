@@ -70,6 +70,14 @@ jwt:
   expiration: 2592000000 # 30 days in milliseconds
 
 
+# Admin Configuration
+admin:
+  email: ${ADMIN_EMAIL:kinneramadhu123@gmail.com}
+  # Default secret if not provided in env. Consider rotating this or forcing env var in prod.
+  # This corresponds to "JBSWY3DPEHPK3PXP" or similar base32 secret.
+  # Using the generated one: 59cc4505b1378606 (hex) -> need to convert or just put one here.
+  # User prompt example: JBSWY3DPEHPK3PXP
+  totp-secret: ${ADMIN_TOTP_SECRET:REDACTED_TOTP_SECRET}
 
 
 logging:
@@ -123,8 +131,3 @@ app:
     cloud-name: ${BREAKUP_CLOUDINARY_CLOUD_NAME:dhssmiyoc}
     api-key: ${BREAKUP_CLOUDINARY_API_KEY:REDACTED_CLOUDINARY_KEY}
     api-secret: ${BREAKUP_CLOUDINARY_API_SECRET:REDACTED_CLOUDINARY_SECRET}
-
-
-
-
-
