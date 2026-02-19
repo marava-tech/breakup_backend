@@ -1,6 +1,6 @@
 {
   "key": "languages",
-  "value": "telugu,english,hindi,tamil,kannada,malayalam,bengali,marathi",
+  "value": "te,en,hi,ta,kn,ml,bn,mr",
   "description": "Supported languages for the application",
   "active": true
-} 
+}

@@ -40,71 +40,46 @@ public class OTPServiceImpl implements OTPService {
 
     private String getUnFormattedGmailContent() {
         return """
+                <!DOCTYPE html>
                 <html>
-                            <head>
-                                <style>
-                                    body {
-                                        font-family: Arial, sans-serif;
-                                        background-color: #f9f9f9;
-                                        color: #333;
-                                        margin: 0;
-                                        padding: 0;
-                                    }
-                                    .container {
-                                        max-width: 600px;
-                                        margin: 20px auto;
-                                        background-color: #fff;
-                                        border-radius: 8px;
-                                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                                        overflow: hidden;
-                                    }
-                                    .header {
-                                        background-color: #e91e63;
-                                        color: #fff;
-                                        padding: 10px 20px;
-                                        text-align: center;
-                                    }
-                                    .logo {
-                                        margin: 20px auto;
-                                        display: block;
-                                        max-width: 150px;
-                                    }
-                                    .content {
-                                        padding: 20px;
-                                        text-align: center;
-                                    }
-                                    .otp {
-                                        font-size: 24px;
-                                        font-weight: bold;
-                                        color: #e91e63;
-                                    }
-                                    .footer {
-                                        background-color: #f1f1f1;
-                                        padding: 10px 20px;
-                                        text-align: center;
-                                        font-size: 12px;
-                                        color: #666;
-                                    }
-                                </style>
-                            </head>
-                            <body>
-                                <div class="container">
-                                    <div class="header">
-                                        <h2>Welcome to Breakup Stories!</h2>
-                                    </div>
-                                    <div class="content">
-                                        <p>Dear User,</p>
-                                        <p>Your verification OTP is:</p>
-                                        <p class="otp">%s</p>
-                                        <p>Please use this OTP within 10 minutes to complete your action.</p>
-                                        <p>If you didn't request this OTP, please ignore this email.</p>
-                                    </div>
-                                    <div class="footer">
-                                        <p>&copy; %s Breakup Stories. All rights reserved.</p>
-                                    </div>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #ffffff; margin: 0; padding: 0; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+                        .wrapper { padding: 60px 20px; text-align: center; }
+                        .container { max-width: 440px; margin: 0 auto; }
+                        .brand { font-size: 18px; font-weight: 700; color: #e91e63; margin-bottom: 48px; letter-spacing: -0.4px; text-transform: uppercase; }
+                        .content-box { background-color: #ffffff; border: 1px solid #f0f0f0; border-radius: 16px; padding: 40px 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
+                        .title { font-size: 22px; font-weight: 600; margin-bottom: 12px; color: #000000; }
+                        .subtitle { font-size: 15px; color: #666666; margin-bottom: 32px; line-height: 1.5; }
+                        .otp-wrapper { background-color: #fff0f5; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+                        .otp { font-size: 38px; font-weight: 800; color: #e91e63; letter-spacing: 8px; margin: 0; font-family: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Monaco, Consolas, monospace; }
+                        .expiry { font-size: 13px; color: #999999; margin-bottom: 16px; }
+                        .notice { font-size: 12px; color: #c0c0c0; line-height: 1.4; }
+                        .footer { margin-top: 48px; font-size: 12px; color: #bdc3c7; }
+                    </style>
+                </head>
+                <body>
+                    <div class="wrapper">
+                        <div class="container">
+                            <div class="brand">Breakup Stories</div>
+                            <div class="content-box">
+                                <h1 class="title">Verification Code</h1>
+                                <p class="subtitle">Use the code below to securely sign in to your account.</p>
+                                <div class="otp-wrapper">
+                                    <p class="otp">%s</p>
                                 </div>
-                            </body>
-                        </html>
+                                <p class="expiry">Valid for 10 minutes</p>
+                                <p class="notice">If you didn't request this code, you can safely ignore this email.</p>
+                            </div>
+                            <div class="footer">
+                                &copy; %s Breakup Stories
+                            </div>
+                        </div>
+                    </div>
+                </body>
+                </html>
                 """;
     }
 
@@ -116,12 +91,6 @@ public class OTPServiceImpl implements OTPService {
         // Admin Auth Flow: Skip sending email, rely on TOTP
         if (normalizedEmail.equalsIgnoreCase(adminEmail)) {
             log.info("Admin login attempt for email: {}. Skipping email OTP, expecting TOTP.", email);
-            return true;
-        }
-
-        // Special exception for testing email - bypass OTP sending
-        if ("hollypoter5@gmail.com".equals(normalizedEmail)) {
-            log.info("Bypassing OTP sending for testing email: {}", email);
             return true;
         }
 
@@ -158,12 +127,6 @@ public class OTPServiceImpl implements OTPService {
                 log.warn("Invalid TOTP provided for admin: {}", email);
                 throw new InvalidOTPException("Invalid Authenticator Code");
             }
-        }
-
-        // Special exception for testing email - bypass OTP verification
-        if ("hollypoter5@gmail.com".equals(normalizedEmail)) {
-            log.info("Bypassing OTP verification for testing email: {}", email);
-            return true;
         }
 
         try {

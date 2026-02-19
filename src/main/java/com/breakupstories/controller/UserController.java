@@ -19,46 +19,70 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 @Tag(name = "Users", description = "User management APIs")
 public class UserController {
-    
+
     private final UserService userService;
-    
+
     @PostMapping("/profile-image")
     @Operation(summary = "Update profile image", description = "Update the current user's profile image")
     public ResponseEntity<UserResponse> updateProfileImage(
             Authentication authentication,
             @RequestParam("image") MultipartFile imageFile) {
-        
+
         if (authentication == null || !authentication.isAuthenticated()) {
             log.warn("Unauthenticated access attempt to update profile image");
             throw new BadCredentialsException("User not authenticated");
         }
-        
+
         String userEmail = authentication.getName();
         log.info("Updating profile image for authenticated user: {}", userEmail);
-        
+
         UserResponse response = userService.updateProfileImage(userEmail, imageFile);
         return ResponseEntity.ok(response);
     }
-    
+
     @PutMapping("/preferred-language")
     @Operation(summary = "Update preferred story language", description = "Update the current user's preferred story language")
     public ResponseEntity<UserResponse> updatePreferredStoryLanguage(
             Authentication authentication,
             @RequestParam String preferredStoryLanguage) {
-        
+
         if (authentication == null || !authentication.isAuthenticated()) {
             log.warn("Unauthenticated access attempt to update preferred story language");
             throw new BadCredentialsException("User not authenticated");
         }
-        
+
         String userEmail = authentication.getName();
-        log.info("Updating preferred story language for authenticated user: {} -> {}", 
-            userEmail, preferredStoryLanguage);
-        
+        log.info("Updating preferred story language for authenticated user: {} -> {}",
+                userEmail, preferredStoryLanguage);
+
         UserResponse response = userService.updatePreferredStoryLanguage(userEmail, preferredStoryLanguage);
         return ResponseEntity.ok(response);
     }
-    
+
+    @PutMapping("/profile")
+    @Operation(summary = "Update user profile", description = "Update the current user's profile information (name, gender, age, preferred language)")
+    public ResponseEntity<UserResponse> updateProfile(
+            Authentication authentication,
+            @RequestBody com.breakupstories.dto.UserRequest request) {
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.warn("Unauthenticated access attempt to update profile");
+            throw new BadCredentialsException("User not authenticated");
+        }
+
+        String userEmail = authentication.getName();
+        com.breakupstories.model.User user = userService.getUserEntityByEmail(userEmail);
+
+        log.info("Updating profile for authenticated user: {}", userEmail);
+
+        // Ensure email matches to prevent unauthorized updates if someone tries to
+        // change the email field
+        request.setEmail(userEmail);
+
+        UserResponse response = userService.updateUser(user.getId(), request);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/profile")
     @Operation(summary = "Get user profile", description = "Retrieve user profile with statistics")
     public ResponseEntity<UserProfileResponse> getUserProfile(Authentication authentication) {
@@ -66,12 +90,12 @@ public class UserController {
             log.warn("Unauthenticated access attempt to get user profile");
             throw new BadCredentialsException("User not authenticated");
         }
-        
+
         String userEmail = authentication.getName();
         log.info("Retrieving profile for authenticated user: {}", userEmail);
-        
+
         UserProfileResponse response = userService.getUserProfile(userEmail);
         return ResponseEntity.ok(response);
     }
-    
-} 
+
+}

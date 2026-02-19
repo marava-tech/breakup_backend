@@ -33,18 +33,28 @@ public class DataInitializationConfig implements CommandLineRunner {
             PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
             Resource[] resources = resolver.getResources("classpath:startup/*.json");
             log.info("Found {} JSON files in startup directory", resources.length);
-            
+
             for (Resource resource : resources) {
                 log.info("Processing startup file: {}", resource.getFilename());
                 List<DefaultConfig> configs = parseJsonResource(resource);
                 log.info("Parsed {} configs from {}", configs.size(), resource.getFilename());
-                
+
                 for (DefaultConfig config : configs) {
-                    if (!defaultConfigRepository.existsByKey(config.getKey())) {
+                    java.util.Optional<DefaultConfig> existingOpt = defaultConfigRepository.findByKey(config.getKey());
+                    if (existingOpt.isEmpty()) {
                         defaultConfigRepository.save(config);
                         log.info("Inserted default config from {}: {}", resource.getFilename(), config.getKey());
                     } else {
-                        log.debug("Config already exists: {}", config.getKey());
+                        DefaultConfig existing = existingOpt.get();
+                        if (!existing.getValue().equals(config.getValue())) {
+                            existing.setValue(config.getValue());
+                            existing.setDescription(config.getDescription());
+                            existing.setActive(config.isActive());
+                            defaultConfigRepository.save(existing);
+                            log.info("Updated default config from {}: {}", resource.getFilename(), config.getKey());
+                        } else {
+                            log.debug("Config already exists and is up to date: {}", config.getKey());
+                        }
                     }
                 }
             }
@@ -58,7 +68,8 @@ public class DataInitializationConfig implements CommandLineRunner {
         try (InputStream is = resource.getInputStream()) {
             // Try to parse as array
             try {
-                return objectMapper.readValue(is, new TypeReference<List<DefaultConfig>>() {});
+                return objectMapper.readValue(is, new TypeReference<List<DefaultConfig>>() {
+                });
             } catch (Exception e) {
                 // If not an array, try as single object
                 try (InputStream is2 = resource.getInputStream()) {
@@ -71,4 +82,4 @@ public class DataInitializationConfig implements CommandLineRunner {
             return new ArrayList<>();
         }
     }
-} 
+}

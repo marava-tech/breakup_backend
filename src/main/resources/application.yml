@@ -40,8 +40,8 @@ spring:
   mail:
     host: ${BREAKUP_MAIL_HOST:smtp.gmail.com}
     port: ${BREAKUP_MAIL_PORT:587}
-    username: ${BREAKUP_MAIL_USERNAME:}
-    password: ${BREAKUP_MAIL_PASSWORD:}
+    username: ${BREAKUP_MAIL_USERNAME:marava.technologies@gmail.com}
+    password: ${BREAKUP_MAIL_PASSWORD:REDACTED_GMAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -66,7 +66,7 @@ server:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:}
+  secret: ${JWT_SECRET:REDACTED_JWT_SECRET}
   expiration: 2592000000 # 30 days in milliseconds
 
 
@@ -128,9 +128,12 @@ management:
 # Cloudinary Configuration for Breakup Stories
 app:
   cloudinary:
-    cloud-name: ${BREAKUP_CLOUDINARY_CLOUD_NAME:}
-    api-key: ${BREAKUP_CLOUDINARY_API_KEY:}
-    api-secret: ${BREAKUP_CLOUDINARY_API_SECRET:}
+    cloud-name: ${BREAKUP_CLOUDINARY_CLOUD_NAME:dhssmiyoc}
+    api-key: ${BREAKUP_CLOUDINARY_API_KEY:REDACTED_CLOUDINARY_KEY}
+    api-secret: ${BREAKUP_CLOUDINARY_API_SECRET:REDACTED_CLOUDINARY_SECRET}
+  story:
+    view-dedup-ttl-seconds: ${VIEW_DEDUP_TTL_SECONDS:1800} # Default 30 minutes
+
 
 # Google Cloud Configuration for AI Processing
 google:
@@ -150,8 +153,9 @@ google:
 # OpenAI Configuration for AI Processing
 openai:
   api:
-    key: ${OPENAI_API_KEY:}
+    key: ${OPENAI_API_KEY:REDACTED_OPENAI_KEY}
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
     model: ${OPENAI_MODEL:gpt-4o}
     max-tokens: ${OPENAI_MAX_TOKENS:2048}
-    temperature: ${OPENAI_TEMPERATURE:0.7}
+
+
