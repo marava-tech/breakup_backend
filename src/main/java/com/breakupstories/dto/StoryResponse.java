@@ -46,6 +46,10 @@ public class StoryResponse {
     private Story.CreationType creationType;
     private Story.Category category;
 
+    private String shareUrl;
+
+    private static final String SHARE_URL_BASE = "https://breakupstories.com/story/";
+
     public static StoryResponse fromStory(Story story, User user, boolean isLikedByMe, long likeCount,
             long commentCount) {
         return StoryResponse.builder()
@@ -62,6 +66,7 @@ public class StoryResponse {
                 .playCount(story.getPlayCount())
                 .completionCount(story.getCompletionCount())
                 .spotifyUrl(story.getSpotifyUrl())
+                .shareUrl(SHARE_URL_BASE + story.getId())
                 .likeCount(likeCount)
                 .commentCount(commentCount)
                 .status(story.getStatus())
@@ -96,6 +101,7 @@ public class StoryResponse {
                 .playCount(story.getPlayCount())
                 .completionCount(story.getCompletionCount())
                 .spotifyUrl(story.getSpotifyUrl())
+                .shareUrl(SHARE_URL_BASE + story.getId())
                 .likeCount(likeCount)
                 .commentCount(commentCount)
                 .status(story.getStatus())
@@ -127,6 +133,7 @@ public class StoryResponse {
                 .playCount(story.getPlayCount())
                 .completionCount(story.getCompletionCount())
                 .spotifyUrl(story.getSpotifyUrl())
+                .shareUrl(SHARE_URL_BASE + story.getId())
                 .status(story.getStatus())
                 .contents(story.getContents())
                 .rejectionReasons(story.getRejectionReasons())

@@ -24,7 +24,11 @@ public class CommentResponse {
     private List<CommentResponse> replies;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    
+
+    // Support (Like) fields
+    private long supportCount;
+    private boolean isSupportedByMe;
+
     // Abuse detection fields
     private boolean isAbusive;
     private String category;
@@ -47,4 +51,11 @@ public class CommentResponse {
                 .updatedAt(comment.getUpdatedAt())
                 .build();
     }
-} 
+
+    public static CommentResponse fromComment(Comment comment, User user, long supportCount, boolean isSupportedByMe) {
+        CommentResponse response = fromComment(comment, user);
+        response.setSupportCount(supportCount);
+        response.setSupportedByMe(isSupportedByMe);
+        return response;
+    }
+}

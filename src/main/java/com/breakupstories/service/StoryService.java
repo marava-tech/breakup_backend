@@ -148,6 +148,7 @@ public class StoryService {
                     .rejectionReasons(new ArrayList<>()) // Will be populated if AI processing fails
                     .creationType(storyCreationType) // Use determined creation type
                     .category(storyCategory) // Set category
+                    .language(user.getPreferredStoryLanguage()) // Set language from user preference
                     .build();
 
             Story savedStory = storyRepository.save(story);
@@ -438,10 +439,12 @@ public class StoryService {
     @Cacheable(value = "stories-type", key = "'FOR_YOU_LANG:' + #currentUserId + ':' + #language + ':' + #page + ':' + #size")
     public PagedResponse<StoryResponse> getForYouStoriesByLanguage(String language, String currentUserId, int page,
             int size) {
+        String normalizedLang = normalizeLanguage(language);
         User user = userService.getUserEntityById(currentUserId);
 
         Pageable poolPageable = PageRequest.of(0, 500); // Fetch top pool
-        List<Story> pool = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE, poolPageable)
+        List<Story> pool = storyRepository
+                .findByLanguageAndStatus(normalizedLang, Story.StoryStatus.ACTIVE, poolPageable)
                 .getContent();
 
         List<Story> sorted = pool.stream()
@@ -510,8 +513,16 @@ public class StoryService {
                     .map(story -> {
                         try {
                             User user = userService.getUserEntityById(story.getUserId());
-                            // Create StoryResponse using only Story entity data
-                            return StoryResponse.fromStory(story, user);
+
+                            // Fetch interaction data
+                            long likeCount = getLikeCount(story.getId());
+                            long commentCount = getCommentCount(story.getId());
+                            boolean likedByMe = likeService.isLiked(currentUserId, story.getId());
+                            boolean bookmarkedByMe = bookmarkService.isBookmarked(currentUserId, story.getId());
+
+                            // Create StoryResponse with all data
+                            return StoryResponse.fromStory(story, user, likedByMe, bookmarkedByMe, likeCount,
+                                    commentCount);
                         } catch (Exception e) {
                             log.error("Error creating StoryResponse for story {} [RequestID: {}]: {}",
                                     story.getId(), requestId, e.getMessage());
@@ -662,8 +673,10 @@ public class StoryService {
     @Cacheable(value = "stories-feed", key = "#language + ':' + #currentUserId + ':' + #page + ':' + #size")
     public PagedResponse<StoryResponse> getStoriesByLanguage(String language, String currentUserId, int page,
             int size) {
+        String normalizedLang = normalizeLanguage(language);
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatus(normalizedLang, Story.StoryStatus.ACTIVE,
+                pageable);
 
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -689,8 +702,10 @@ public class StoryService {
      */
     @Cacheable(value = "stories-feed", key = "#language + ':anon:' + #page + ':' + #size")
     public PagedResponse<StoryResponse> getStoriesByLanguage(String language, int page, int size) {
+        String normalizedLang = normalizeLanguage(language);
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE, pageable);
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatus(normalizedLang, Story.StoryStatus.ACTIVE,
+                pageable);
 
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -848,8 +863,8 @@ public class StoryService {
      * @param size    Page size
      * @return PagedResponse of comments with nested replies
      */
-    public PagedResponse<CommentResponse> getStoryComments(String storyId, int page, int size) {
-        return commentService.getCommentsByStory(storyId, page, size);
+    public PagedResponse<CommentResponse> getStoryComments(String storyId, String userId, int page, int size) {
+        return commentService.getCommentsByStory(storyId, userId, page, size);
     }
 
     /**
@@ -920,16 +935,14 @@ public class StoryService {
     }
 
     /**
-     * Async view count increment — removes synchronous MongoDB write from read
-     * path.
-     * Fire-and-forget from controller after returning story response.
-     */
-    /**
-     * Async view count — increments in Redis; batched flush to MongoDB every 60s.
+     * Async, fire-and-forget. Records a deduplicated view:
+     * - self-views are excluded
+     * - same user/IP is counted at most once per 24 h per story
+     * - Redis INCR is batched and flushed to MongoDB every 60 s
      */
     @Async("storyOpsExecutor")
-    public void incrementViewCountAsync(String storyId) {
-        viewCountBatchService.incrementInRedis(storyId);
+    public void recordViewAsync(String storyId, String viewerId, String ipAddress, boolean isOwnStory) {
+        viewCountBatchService.recordView(storyId, viewerId, ipAddress, isOwnStory);
     }
 
     /**
@@ -1082,8 +1095,9 @@ public class StoryService {
      * @return PagedResponse of latest stories in the specified language
      */
     public PagedResponse<StoryResponse> getLatestStoriesByLanguage(String language, int page, int size) {
+        String normalizedLang = normalizeLanguage(language);
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByCreatedAtDesc(language,
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByCreatedAtDesc(normalizedLang,
                 Story.StoryStatus.ACTIVE, pageable);
 
         List<StoryResponse> stories = storyPage.getContent().stream()
@@ -1111,8 +1125,9 @@ public class StoryService {
      */
     public PagedResponse<StoryResponse> getLatestStoriesByLanguage(String language, String currentUserId, int page,
             int size) {
+        String normalizedLang = normalizeLanguage(language);
         Pageable pageable = PageRequest.of(page, size);
-        Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByCreatedAtDesc(language,
+        Page<Story> storyPage = storyRepository.findByLanguageAndStatusOrderByCreatedAtDesc(normalizedLang,
                 Story.StoryStatus.ACTIVE, pageable);
 
         List<StoryResponse> stories = storyPage.getContent().stream()
@@ -1194,9 +1209,10 @@ public class StoryService {
      * @return PagedResponse of voice stories in the specified language
      */
     public PagedResponse<StoryResponse> getVoiceStoriesByLanguage(String language, int page, int size) {
+        String normalizedLang = normalizeLanguage(language);
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusAndLanguageOrderByCreatedAtDesc(
-                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, language, pageable);
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, normalizedLang, pageable);
 
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> {
@@ -1223,9 +1239,10 @@ public class StoryService {
      */
     public PagedResponse<StoryResponse> getVoiceStoriesByLanguage(String language, String currentUserId, int page,
             int size) {
+        String normalizedLang = normalizeLanguage(language);
         Pageable pageable = PageRequest.of(page, size);
         Page<Story> storyPage = storyRepository.findByCreationTypeAndStatusAndLanguageOrderByCreatedAtDesc(
-                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, language, pageable);
+                Story.CreationType.UPLOADED, Story.StoryStatus.ACTIVE, normalizedLang, pageable);
 
         List<StoryResponse> stories = storyPage.getContent().stream()
                 .map(story -> toStoryResponse(story, currentUserId, true))
@@ -1666,7 +1683,7 @@ public class StoryService {
      * @param size          Page size
      * @return PagedResponse of stories matching the search criteria
      */
-    public PagedResponse<StoryResponse> searchStoriesByContent(String searchContent,
+    public PagedResponse<StoryResponse> searchStoriesByContent(String searchContent, String language,
             String currentUserId, int page, int size) {
         String requestId = RequestContext.getRequestId();
         log.info("Searching stories by content - searchContent: {}, user: {} [RequestID: {}]",
@@ -1686,7 +1703,17 @@ public class StoryService {
             List<Story> tagMatches = new ArrayList<>();
             List<Story> otherMatches = new ArrayList<>();
 
+            String normalizedSearchLang = normalizeLanguage(language);
+
             for (Story story : allActiveStories) {
+                // Filter by language if provided
+                if (normalizedSearchLang != null && !normalizedSearchLang.isEmpty()) {
+                    String storyLang = normalizeLanguage(story.getLanguage());
+                    if (storyLang == null || !storyLang.equals(normalizedSearchLang)) {
+                        continue;
+                    }
+                }
+
                 boolean titleMatch = false;
                 boolean tagMatch = false;
 
@@ -1778,13 +1805,14 @@ public class StoryService {
      * @return PagedResponse of trending stories in the specified language
      */
     public PagedResponse<StoryResponse> getTrendingStoriesByLanguage(String language, int page, int size) {
+        String normalizedLang = normalizeLanguage(language);
         String requestId = RequestContext.getRequestId();
         log.info("Getting trending stories by language for unauthenticated user - language: {} [RequestID: {}]",
-                language, requestId);
+                normalizedLang, requestId);
 
         try {
             // Get all active stories by language
-            Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE,
+            Page<Story> storyPage = storyRepository.findByLanguageAndStatus(normalizedLang, Story.StoryStatus.ACTIVE,
                     PageRequest.of(0, Integer.MAX_VALUE));
             List<Story> allActiveStories = storyPage.getContent();
 
@@ -1860,13 +1888,14 @@ public class StoryService {
      */
     public PagedResponse<StoryResponse> getTrendingStoriesByLanguage(String language, String currentUserId, int page,
             int size) {
+        String normalizedLang = normalizeLanguage(language);
         String requestId = RequestContext.getRequestId();
-        log.info("Getting trending stories by language for user: {} - language: {} [RequestID: {}]", currentUserId,
-                language, requestId);
+        log.info("Getting trending stories by language for user {} - language: {} [RequestID: {}]",
+                currentUserId, normalizedLang, requestId);
 
         try {
             // Get all active stories by language
-            Page<Story> storyPage = storyRepository.findByLanguageAndStatus(language, Story.StoryStatus.ACTIVE,
+            Page<Story> storyPage = storyRepository.findByLanguageAndStatus(normalizedLang, Story.StoryStatus.ACTIVE,
                     PageRequest.of(0, Integer.MAX_VALUE));
             List<Story> allActiveStories = storyPage.getContent();
 
@@ -2097,7 +2126,8 @@ public class StoryService {
 
     public PagedResponse<StoryResponse> getSimilarStoriesByLanguage(String storyId, String language, String userId,
             int page, int size) {
-        return getSimilarStoriesInternal(storyId, language, userId, page, size);
+        String normalizedLang = normalizeLanguage(language);
+        return getSimilarStoriesInternal(storyId, normalizedLang, userId, page, size);
     }
 
     private PagedResponse<StoryResponse> getSimilarStoriesInternal(String storyId, String language, String userId,
@@ -2150,5 +2180,26 @@ public class StoryService {
             log.error("Error getting similar stories [RequestID: {}]: {}", requestId, e.getMessage(), e);
             throw new RuntimeException("Failed to get similar stories", e);
         }
+    }
+
+    private static final Map<String, String> LANGUAGE_CODE_MAP = Map.ofEntries(
+            Map.entry("telugu", "te"),
+            Map.entry("english", "en"),
+            Map.entry("hindi", "hi"),
+            Map.entry("tamil", "ta"),
+            Map.entry("kannada", "kn"),
+            Map.entry("malayalam", "ml"),
+            Map.entry("marathi", "mr"),
+            Map.entry("gujarati", "gu"),
+            Map.entry("bengali", "bn"),
+            Map.entry("punjabi", "pa"),
+            Map.entry("odia", "or"),
+            Map.entry("assamese", "as"));
+
+    private String normalizeLanguage(String lang) {
+        if (lang == null)
+            return null;
+        String lower = lang.toLowerCase().trim();
+        return LANGUAGE_CODE_MAP.getOrDefault(lower, lower);
     }
 }

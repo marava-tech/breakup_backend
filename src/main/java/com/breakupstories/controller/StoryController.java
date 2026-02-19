@@ -344,7 +344,6 @@ public class StoryController {
 
         StoryResponse response;
         String userId = null;
-        String ipAddress = null;
 
         if (authentication != null && authentication.isAuthenticated()) {
             String email = authentication.getName();
@@ -354,66 +353,27 @@ public class StoryController {
             response = storyService.getStoryById(storyId);
         }
 
-        // Get client info for IP-based cooldown check
         ClientInfoService.ClientInfo clientInfo = clientInfoService.extractClientInfo();
-        ipAddress = clientInfo.getIpAddress();
 
-        // COMMENTED OUT: Check if user has viewed this story recently (1-minute
-        // cooldown)
-        // boolean hasViewedRecently = false;
-        // if (userId != null) {
-        // hasViewedRecently = auditService.hasViewedStoryRecently(userId, storyId);
-        // } else if (ipAddress != null) {
-        // hasViewedRecently = auditService.hasViewedStoryRecentlyByIP(ipAddress,
-        // storyId);
-        // }
-        //
-        // if (hasViewedRecently) {
-        // log.info("View skipped due to 1-minute cooldown - story: {}, user: {}, ip:
-        // {}", storyId, userId, ipAddress);
-        // return ResponseEntity.ok(response);
-        // }
-
-        // COMMENTED OUT: Check if user is viewing their own story
-        // boolean isOwnStory = false;
-        // if (userId != null) {
-        // Story story = storyRepository.findById(storyId).orElse(null);
-        // if (story != null) {
-        // isOwnStory = userId.equals(story.getUserId());
-        // }
-        // }
-
-        // Async: increment view count and audit — non-blocking, removes DB writes from
-        // response path
-        storyService.incrementViewCountAsync(storyId);
-        log.debug("View count increment scheduled for story: {} (viewed by user: {}, ip: {})", storyId, userId,
-                ipAddress);
-
-        // COMMENTED OUT: Only increment view count if user is not viewing their own
-        // story and hasn't viewed recently
-        // if (!isOwnStory) {
-        // storyService.incrementViewCount(storyId);
-        // log.info("View count incremented for story: {} (viewed by user: {}, ip: {})",
-        // storyId, userId, ipAddress);
-        // } else {
-        // log.info("View count not incremented for story: {} (user viewing their own
-        // story: {})", storyId, userId);
-        // }
-
-        // Audit story view (async — non-blocking)
+        // Determine self-view once — used by both view counter and audit
         boolean isOwnStory = false;
         if (userId != null) {
             Story story = storyRepository.findById(storyId).orElse(null);
             if (story != null) {
                 isOwnStory = userId.equals(story.getUserId());
             }
+        }
+
+        // Async: deduplicated view count (Redis INCR → MongoDB batch every 60 s)
+        storyService.recordViewAsync(storyId, userId, clientInfo.getIpAddress(), isOwnStory);
+
+        // Async: audit log for analytics
+        if (userId != null) {
             auditService.logStoryViewAsync(userId, storyId, clientInfo.getUserAgent(),
                     clientInfo.getIpAddress(), clientInfo.getSessionId(), isOwnStory);
-            log.debug("Story view audit scheduled for user {} on story {}", userId, storyId);
-        } else if (ipAddress != null) {
-            auditService.logStoryViewByIPAsync(ipAddress, storyId, clientInfo.getUserAgent(),
-                    clientInfo.getSessionId());
-            log.debug("Story view audit scheduled for IP {} on story {}", ipAddress, storyId);
+        } else if (clientInfo.getIpAddress() != null) {
+            auditService.logStoryViewByIPAsync(clientInfo.getIpAddress(), storyId,
+                    clientInfo.getUserAgent(), clientInfo.getSessionId());
         }
 
         return ResponseEntity.ok(response);
@@ -490,22 +450,23 @@ public class StoryController {
     @Operation(summary = "Search stories by content", description = "Search stories by title and tags using unified search content (case-insensitive)")
     public ResponseEntity<PagedResponse<StoryResponse>> searchStoriesByContent(
             @RequestParam String searchContent,
+            @RequestParam(required = false) String language,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
 
         try {
             String requestId = RequestContext.getRequestId();
-            log.info("Search request - searchContent: {}, page: {}, size: {} [RequestID: {}]",
-                    searchContent, page, size, requestId);
+            log.info("Search request - searchContent: {}, language: {}, page: {}, size: {} [RequestID: {}]",
+                    searchContent, language, page, size, requestId);
 
             PagedResponse<StoryResponse> response;
             if (authentication != null && authentication.isAuthenticated()) {
                 String email = authentication.getName();
                 String userId = userService.getUserEntityByEmail(email).getId();
-                response = storyService.searchStoriesByContent(searchContent, userId, page, size);
+                response = storyService.searchStoriesByContent(searchContent, language, userId, page, size);
             } else {
-                response = storyService.searchStoriesByContent(searchContent, null, page, size);
+                response = storyService.searchStoriesByContent(searchContent, language, null, page, size);
             }
 
             log.info("Search completed successfully. Found {} results [RequestID: {}]",
