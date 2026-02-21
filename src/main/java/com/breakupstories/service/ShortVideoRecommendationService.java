@@ -5,6 +5,7 @@ import com.breakupstories.dto.ShortVideoResponse;
 import com.breakupstories.model.ShortVideo;
 import com.breakupstories.model.ShortVideoInteraction;
 import com.breakupstories.repository.ShortVideoInteractionRepository;
+import com.breakupstories.repository.ShortVideoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Service;
 import com.breakupstories.util.LanguageUtils;
 
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -27,18 +27,18 @@ import java.util.stream.Collectors;
 public class ShortVideoRecommendationService {
 
     private final ShortVideoInteractionRepository interactionRepository;
+    private final ShortVideoRepository shortVideoRepository;
     private final ShortVideoService shortVideoService;
     private final MongoTemplate mongoTemplate;
 
     public PagedResponse<ShortVideoResponse> getFeed(String userId, String language, int size) {
         List<String> watchedIds = Collections.emptyList();
         if (userId != null) {
-            // Fetch recent watched IDs to avoid huge queries, taking the last 2000 views
-            watchedIds = interactionRepository.findByUserIdAndType(userId, ShortVideoInteraction.InteractionType.VIEW)
+            // Issue #17: projection query — fetches only videoId field, not full documents
+            watchedIds = interactionRepository.findVideoIdsByUserIdAndType(userId, ShortVideoInteraction.InteractionType.VIEW)
                     .stream()
-                    .sorted(Comparator.comparing(ShortVideoInteraction::getCreatedAt).reversed())
-                    .limit(2000)
                     .map(ShortVideoInteraction::getVideoId)
+                    .limit(2000)
                     .collect(Collectors.toList());
             log.info("User {} has watched {} videos", userId, watchedIds.size());
         }
@@ -49,10 +49,11 @@ public class ShortVideoRecommendationService {
             criteria = criteria.and("_id").nin(watchedIds);
         }
 
+        List<String> languageVariants = null;
         if (language != null && !language.trim().isEmpty()) {
-            List<String> variants = LanguageUtils.getLanguageVariants(language);
-            log.info("Filtering short videos by language variants: {}", variants);
-            criteria = criteria.and("language").in(variants);
+            languageVariants = LanguageUtils.getLanguageVariants(language);
+            log.info("Filtering short videos by language variants: {}", languageVariants);
+            criteria = criteria.and("language").in(languageVariants);
         }
 
         log.info("Short video feed criteria: {}", criteria.getCriteriaObject());
@@ -67,13 +68,12 @@ public class ShortVideoRecommendationService {
 
         List<ShortVideo> mappedResults = results.getMappedResults();
 
-        // Fallback: if no unseen videos found and we were filtering watched ones, relax
-        // the criteria
+        // Fallback: if no unseen videos found and we were filtering watched ones, relax the criteria
         if (mappedResults.isEmpty() && !watchedIds.isEmpty()) {
             log.info("No unseen videos found for user {}, falling back to all active videos", userId);
             Criteria fallbackCriteria = Criteria.where("status").is(ShortVideo.VideoStatus.ACTIVE);
-            if (language != null && !language.trim().isEmpty()) {
-                fallbackCriteria = fallbackCriteria.and("language").in(LanguageUtils.getLanguageVariants(language));
+            if (languageVariants != null) {
+                fallbackCriteria = fallbackCriteria.and("language").in(languageVariants);
             }
             aggregation = Aggregation.newAggregation(Aggregation.match(fallbackCriteria), sampleStage);
             results = mongoTemplate.aggregate(aggregation, ShortVideo.class, ShortVideo.class);
@@ -86,6 +86,11 @@ public class ShortVideoRecommendationService {
                 .map(v -> shortVideoService.mapToResponse(v, userId))
                 .collect(Collectors.toList());
 
-        return PagedResponse.of(responses, 0, size, 10000L);
+        // Issue #18: use real total count instead of hardcoded 10000
+        long total = languageVariants != null
+                ? shortVideoRepository.countByStatusAndLanguageIn(ShortVideo.VideoStatus.ACTIVE, languageVariants)
+                : shortVideoRepository.countByStatus(ShortVideo.VideoStatus.ACTIVE);
+
+        return PagedResponse.of(responses, 0, size, total);
     }
 }

@@ -3,6 +3,7 @@ package com.breakupstories.repository;
 import com.breakupstories.model.ShortVideoInteraction;
 import com.breakupstories.model.ShortVideoInteraction.InteractionType;
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -17,5 +18,7 @@ public interface ShortVideoInteractionRepository extends MongoRepository<ShortVi
     List<ShortVideoInteraction> findByUserIdAndTypeAndCreatedAtAfter(String userId, InteractionType type,
             LocalDateTime after);
 
-    List<ShortVideoInteraction> findByUserIdAndType(String userId, InteractionType type);
+    // Issue #17: projection — returns only videoId field to avoid loading full documents
+    @Query(value = "{'userId': ?0, 'type': ?1}", fields = "{'videoId': 1, '_id': 0}")
+    List<ShortVideoInteraction> findVideoIdsByUserIdAndType(String userId, InteractionType type);
 }

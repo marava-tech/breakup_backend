@@ -6,6 +6,7 @@ import com.breakupstories.dto.ShortVideoResponse;
 import com.breakupstories.model.ShortVideo;
 import com.breakupstories.repository.ShortVideoLikeRepository;
 import com.breakupstories.repository.ShortVideoRepository;
+import com.breakupstories.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -13,8 +14,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import com.breakupstories.util.LanguageUtils;
-
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,7 +31,7 @@ public class ShortVideoService {
                 .description(request.getDescription())
                 .videoUrl(request.getVideoUrl())
                 .thumbnailUrl(request.getThumbnailUrl())
-                .language(LanguageUtils.normalizeLanguage(request.getLanguage()))
+                .language(request.getLanguage() != null ? request.getLanguage().name() : null)
                 .tags(request.getTags())
                 .status(request.getStatus() != null ? request.getStatus() : ShortVideo.VideoStatus.ACTIVE)
                 .build();
@@ -43,7 +42,7 @@ public class ShortVideoService {
 
     public ShortVideoResponse updateShortVideo(String id, ShortVideoRequest request) {
         ShortVideo video = shortVideoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Short video not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("ShortVideo", "id", id));
 
         if (request.getTitle() != null)
             video.setTitle(request.getTitle());
@@ -54,7 +53,7 @@ public class ShortVideoService {
         if (request.getThumbnailUrl() != null)
             video.setThumbnailUrl(request.getThumbnailUrl());
         if (request.getLanguage() != null)
-            video.setLanguage(LanguageUtils.normalizeLanguage(request.getLanguage()));
+            video.setLanguage(request.getLanguage().name());
         if (request.getTags() != null)
             video.setTags(request.getTags());
         if (request.getStatus() != null)
@@ -70,7 +69,7 @@ public class ShortVideoService {
 
     public ShortVideoResponse getShortVideoById(String id, String userId) {
         ShortVideo video = shortVideoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Short video not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("ShortVideo", "id", id));
         return mapToResponse(video, userId);
     }
 

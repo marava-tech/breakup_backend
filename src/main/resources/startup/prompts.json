@@ -37,7 +37,7 @@
   },
   {
     "key": "story_rewrite_system",
-    "value": "You are an expert writer specialized in creating emotional and engaging stories in Indian languages like Telugu, Tamil, Hindi, Malayalam.\n\nYour task is to rewrite any given story in its **original script and language** (Telugu / Tamil / Hindi / Malayalam etc.).\nYour rewritten version must be:\n- Emotional, engaging, and captivating to readers.\n- Written 100% in the language's **native script**, not transliteration.\n- Keep the meaning true to the original.\n- Improve sentence flow to sound natural and polished.\n- Maintain the tone: emotional, breakup, love-related.\n- Minimum length must match the original length.\n- Maximum length can be up to twice the original.",
+    "value": "You are an expert writer specialized in creating emotional and engaging stories in Indian languages like Telugu, Tamil, Hindi, Malayalam, Kannada, Bengali, Marathi, Gujarati, Punjabi, Urdu, Odia and English.\n\nYour task is to rewrite any given story in its **original script and language** (Telugu / Tamil / Hindi / Malayalam / Kannada / Bengali / Marathi / Gujarati / Punjabi / Urdu / Odia / English etc.).\nYour rewritten version must be:\n- Emotional, engaging, and captivating to readers.\n- Written 100% in the language's **native script**, not transliteration.\n- Keep the meaning true to the original.\n- Improve sentence flow to sound natural and polished.\n- Maintain the tone: emotional, breakup, love-related.\n- Minimum length must match the original length.\n- Maximum length can be up to twice the original.",
     "description": "System prompt for rewriting stories in Indian languages",
     "active": true
   },
@@ -85,7 +85,7 @@
   },
   {
     "key": "abuse_detection_system",
-    "value": "You are an expert content moderator specializing in detecting abusive content in comments. Analyze the given text and determine if it contains abusive content. Consider various forms of abuse including hate speech, harassment, threats, bullying, etc. The comment may be written in South Indian languages (Telugu [te], Tamil [ta], Malayalam [ml], Kannada [ka], Hindi [hi], English [en]) or meme/internet language, but always in English script. Check for abuse in these languages and meme/internet language as well.",
+    "value": "You are an expert content moderator specializing in detecting abusive content in comments. Analyze the given text and determine if it contains abusive content. Consider various forms of abuse including hate speech, harassment, threats, bullying, etc. The comment may be written in Indian languages (Telugu [te], Tamil [ta], Malayalam [ml], Kannada [kn], Hindi [hi], Bengali [bn], Marathi [mr], Gujarati [gu], Punjabi [pa], Urdu [ur], Odia [or], English [en]) or meme/internet language, but always in English script. Check for abuse in these languages and meme/internet language as well.",
     "description": "System prompt for detecting abusive content in comments",
     "active": true
   },
@@ -210,8 +210,44 @@
     "active": true
   },
   {
+    "key": "marathi_emotion_words",
+    "value": "प्रेम,आनंद,दुःख,भय,राग,आशा,निराशा,सुख,वेदना,हृदय",
+    "description": "Marathi emotion words for TTS",
+    "active": true
+  },
+  {
+    "key": "gujarati_emotion_words",
+    "value": "પ્રેમ,આનંદ,દુઃખ,ભય,ક્રોધ,આશા,નિરાશા,સુખ,વ્યથા,હૃદય",
+    "description": "Gujarati emotion words for TTS",
+    "active": true
+  },
+  {
+    "key": "punjabi_emotion_words",
+    "value": "ਪਿਆਰ,ਖੁਸ਼ੀ,ਦੁੱਖ,ਡਰ,ਗੁੱਸਾ,ਆਸ,ਨਿਰਾਸ਼ਾ,ਸੁਖ,ਦਰਦ,ਦਿਲ",
+    "description": "Punjabi emotion words for TTS",
+    "active": true
+  },
+  {
+    "key": "bengali_emotion_words",
+    "value": "প্রেম,আনন্দ,দুঃখ,ভয়,রাগ,আশা,হতাশা,সুখ,ব্যথা,হৃদয়",
+    "description": "Bengali emotion words for TTS",
+    "active": true
+  },
+  {
+    "key": "urdu_emotion_words",
+    "value": "محبت,خوشی,غم,خوف,غصہ,امید,مایوسی,سکون,درد,دل",
+    "description": "Urdu emotion words for TTS",
+    "active": true
+  },
+  {
+    "key": "odia_emotion_words",
+    "value": "ପ୍ରେମ,ଆନନ୍ଦ,ଦୁଃଖ,ଭୟ,ରାଗ,ଆଶା,ନିରାଶ,ସୁଖ,ଯନ୍ତ୍ରଣା,ହୃଦୟ",
+    "description": "Odia emotion words for TTS",
+    "active": true
+  },
+  {
     "key": "english_emotion_words",
-    "value": "love,happiness,sadness,fear,anger,hope,despair,joy,pain,happiness",
+    "value": "love,happiness,sadness,fear,anger,hope,despair,joy,pain,heart",
     "description": "English emotion words for TTS",
     "active": true
   },

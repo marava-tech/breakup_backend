@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,7 +22,7 @@ public class AdminShortVideoController {
 
     @PostMapping
     @Operation(summary = "Create a short video")
-    public ResponseEntity<ShortVideoResponse> createShortVideo(@RequestBody ShortVideoRequest request) {
+    public ResponseEntity<ShortVideoResponse> createShortVideo(@Valid @RequestBody ShortVideoRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(shortVideoService.createShortVideo(request));
     }
 
@@ -29,7 +30,7 @@ public class AdminShortVideoController {
     @Operation(summary = "Update a short video")
     public ResponseEntity<ShortVideoResponse> updateShortVideo(
             @PathVariable String id,
-            @RequestBody ShortVideoRequest request) {
+            @Valid @RequestBody ShortVideoRequest request) {
         return ResponseEntity.ok(shortVideoService.updateShortVideo(id, request));
     }
 
@@ -45,6 +46,6 @@ public class AdminShortVideoController {
     public ResponseEntity<PagedResponse<ShortVideoResponse>> getAllShortVideos(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(shortVideoService.getAllShortVideosForAdmin(page, size));
+        return ResponseEntity.ok(shortVideoService.getAllShortVideosForAdmin(page, Math.min(size, 100)));
     }
 }

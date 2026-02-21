@@ -23,4 +23,9 @@ public interface ShortVideoRepository extends MongoRepository<ShortVideo, String
             Pageable pageable);
 
     Page<ShortVideo> findByStatusAndLanguage(VideoStatus status, String language, Pageable pageable);
+
+    // Issue #18: real counts for accurate pagination totals
+    long countByStatus(VideoStatus status);
+
+    long countByStatusAndLanguageIn(VideoStatus status, List<String> languages);
 }

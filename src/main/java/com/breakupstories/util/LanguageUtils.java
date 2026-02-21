@@ -10,16 +10,24 @@ public class LanguageUtils {
     private static final Map<String, String> NAME_TO_CODE = new HashMap<>();
 
     static {
+        // South Indian
         NAME_TO_CODE.put("telugu", "te");
-        NAME_TO_CODE.put("hindi", "hi");
-        NAME_TO_CODE.put("english", "en");
         NAME_TO_CODE.put("tamil", "ta");
         NAME_TO_CODE.put("kannada", "kn");
         NAME_TO_CODE.put("malayalam", "ml");
+        // North / West Indian
+        NAME_TO_CODE.put("hindi", "hi");
         NAME_TO_CODE.put("marathi", "mr");
-        NAME_TO_CODE.put("bengali", "bn");
         NAME_TO_CODE.put("gujarati", "gu");
         NAME_TO_CODE.put("punjabi", "pa");
+        NAME_TO_CODE.put("bengali", "bn");
+        NAME_TO_CODE.put("urdu", "ur");
+        // East Indian
+        NAME_TO_CODE.put("odia", "or");
+        NAME_TO_CODE.put("odiya", "or");   // common alternate spelling
+        NAME_TO_CODE.put("oriya", "or");   // legacy spelling still in use
+        // International
+        NAME_TO_CODE.put("english", "en");
     }
 
     public static String normalizeLanguage(String language) {

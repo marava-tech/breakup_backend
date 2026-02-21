@@ -33,6 +33,7 @@ public class ShortVideoComment {
     @Indexed
     private String userId;
 
+    @Indexed
     private String parentId; // nullable for replies
     private String text;
 

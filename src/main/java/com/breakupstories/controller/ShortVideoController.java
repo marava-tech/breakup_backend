@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -22,6 +23,7 @@ import com.breakupstories.util.LanguageUtils;
 @RestController
 @RequestMapping("/api/v1/short-videos")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Short Videos", description = "User endpoints for short video reels feed and interactions")
 public class ShortVideoController {
 
@@ -38,7 +40,7 @@ public class ShortVideoController {
 
         String userId = getUserIdFromAuth(authentication);
         String normalizedLanguage = LanguageUtils.normalizeLanguage(language);
-        return ResponseEntity.ok(recommendationService.getFeed(userId, normalizedLanguage, size));
+        return ResponseEntity.ok(recommendationService.getFeed(userId, normalizedLanguage, Math.min(size, 100)));
     }
 
     @PostMapping("/{videoId}/view")
@@ -113,6 +115,7 @@ public class ShortVideoController {
     private String requireUserId(Authentication authentication) {
         String userId = getUserIdFromAuth(authentication);
         if (userId == null) {
+            log.warn("Unauthorized access attempt — no userId resolved from auth token");
             throw new RuntimeException("Unauthorized: User must be logged in");
         }
         return userId;
