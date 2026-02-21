@@ -33,14 +33,24 @@ public class TranscriptionService {
     // Fixed GCS bucket for temporary audio uploads — must exist in the project
     private static final String GCS_AUDIO_BUCKET = "breakup-stories-audio-temp";
 
-    // Language mapping for Indian languages
-    private static final Map<String, String> LANGUAGE_MAPPING = Map.of(
-            "te", "te-IN", // Telugu
-            "hi", "hi-IN", // Hindi
-            "ta", "ta-IN", // Tamil
-            "kn", "kn-IN", // Kannada
-            "ml", "ml-IN", // Malayalam
-            "en", "en-US" // English
+    // Language mapping for Indian languages — Google Cloud Speech-to-Text locale codes
+    private static final Map<String, String> LANGUAGE_MAPPING = Map.ofEntries(
+            // South Indian
+            Map.entry("te", "te-IN"),   // Telugu
+            Map.entry("ta", "ta-IN"),   // Tamil
+            Map.entry("kn", "kn-IN"),   // Kannada
+            Map.entry("ml", "ml-IN"),   // Malayalam
+            // North / West Indian
+            Map.entry("hi", "hi-IN"),   // Hindi
+            Map.entry("mr", "mr-IN"),   // Marathi
+            Map.entry("gu", "gu-IN"),   // Gujarati
+            Map.entry("pa", "pa-IN"),   // Punjabi
+            Map.entry("bn", "bn-IN"),   // Bengali
+            Map.entry("ur", "ur-IN"),   // Urdu
+            // East Indian
+            Map.entry("or", "or-IN"),   // Odia
+            // International
+            Map.entry("en", "en-US")    // English
     );
 
     public TranscriptionService(StoryDataStoreRepository storyRepository) {
@@ -93,7 +103,9 @@ public class TranscriptionService {
             } finally {
                 // Clean up the temporary audio file
                 if (audioFile != null && audioFile.exists()) {
-                    audioFile.delete();
+                    if (!audioFile.delete()) {
+                        log.warn("Failed to delete temp file: {}", audioFile.getPath());
+                    }
                 }
             }
 
@@ -110,12 +122,13 @@ public class TranscriptionService {
      */
     private File downloadAudioFromUrl(String audioUrl) throws IOException {
         Path tempFile = null;
+        java.net.HttpURLConnection connection = null;
         try {
             URL url = new URL(audioUrl);
             tempFile = Files.createTempFile("audio_", ".mp3");
 
             // Create connection with timeout and user agent
-            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+            connection = (java.net.HttpURLConnection) url.openConnection();
             connection.setInstanceFollowRedirects(true);
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(30000); // 30 seconds
@@ -158,6 +171,10 @@ public class TranscriptionService {
                     e.getClass().getSimpleName());
             throw new TranscriptionException(
                     "Failed to download audio file from URL: " + audioUrl + " - " + e.getMessage(), e);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
 
@@ -480,7 +497,7 @@ public class TranscriptionService {
                     "No speech detected. The audio may be too noisy, silent, or contain no recognizable speech.");
         }
 
-        if (confidence < 0.2) {
+        if (confidence < 0.5) {
             log.warn("Low confidence transcription ({}). Audio may be noisy or unclear.", confidence);
         }
 
@@ -565,7 +582,7 @@ public class TranscriptionService {
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to cleanup GCS object {}: {}", gcsUri, e.getMessage());
+            log.error("Failed to cleanup GCS object {} — resource may have leaked: {}", gcsUri, e.getMessage());
         }
     }
 }

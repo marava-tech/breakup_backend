@@ -32,9 +32,12 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -259,6 +262,11 @@ public class UserService implements UserDetailsService {
     public User getUserEntityById(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+    }
+
+    public Map<String, User> getUsersByIds(Collection<String> ids) {
+        return StreamSupport.stream(userRepository.findAllById(ids).spliterator(), false)
+                .collect(Collectors.toMap(User::getId, u -> u));
     }
 
     @Caching(evict = {

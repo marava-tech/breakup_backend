@@ -37,14 +37,14 @@ public class DefaultConfigController {
     private final UserService userService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Create a new config entry")
     public ResponseEntity<DefaultConfigResponse> create(@Valid @RequestBody DefaultConfigRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(defaultConfigService.create(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update a config entry")
     public ResponseEntity<DefaultConfigResponse> update(@PathVariable String id, @Valid @RequestBody DefaultConfigRequest request) {
         return ResponseEntity.ok(defaultConfigService.update(id, request));
@@ -52,7 +52,7 @@ public class DefaultConfigController {
 
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Delete a config entry")
     public ResponseEntity<Void> delete(@PathVariable String id) {
         defaultConfigService.delete(id);
@@ -60,7 +60,7 @@ public class DefaultConfigController {
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Search configs by key containing search term with pagination", 
                description = "Search for configs where the key contains the provided search term (case-insensitive) with pagination support")
     public ResponseEntity<Map<String, Object>> searchByKey(
@@ -149,7 +149,7 @@ public class DefaultConfigController {
     }
 
     @PostMapping("/upload")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Upload a file and save the URL as a value in the default config")
     public ResponseEntity<DefaultConfigResponse> uploadFileAndSaveConfig(
             @RequestParam String key, 

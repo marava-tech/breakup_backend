@@ -1,6 +1,7 @@
 package com.breakupstories.config;
 
 import com.cloudinary.Cloudinary;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,14 +16,27 @@ public class CloudinaryConfig {
 
     private static final Logger log = LoggerFactory.getLogger(CloudinaryConfig.class);
 
-    @Value("${app.cloudinary.cloud-name:dhssmiyoc}")
+    @Value("${app.cloudinary.cloud-name}")
     private String cloudName;
 
-    @Value("${app.cloudinary.api-key:177531384514114}")
+    @Value("${app.cloudinary.api-key}")
     private String apiKey;
 
-    @Value("${app.cloudinary.api-secret:EDGc-oLd1WEpwWav_GYeugZHaTo}")
+    @Value("${app.cloudinary.api-secret}")
     private String apiSecret;
+
+    @PostConstruct
+    public void validateCredentials() {
+        if (cloudName == null || cloudName.isBlank()) {
+            throw new IllegalStateException("app.cloudinary.cloud-name must be configured");
+        }
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("app.cloudinary.api-key must be configured");
+        }
+        if (apiSecret == null || apiSecret.isBlank()) {
+            throw new IllegalStateException("app.cloudinary.api-secret must be configured");
+        }
+    }
 
     @Bean
     Cloudinary getCloudinary() {

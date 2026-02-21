@@ -16,6 +16,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 @Service
 public class TTSService {
@@ -28,14 +30,27 @@ public class TTSService {
     // Maximum bytes for TTS input (Google's limit is 5000)
     private static final int MAX_INPUT_BYTES = 4500; // Leave some buffer
 
-    // Language and voice mapping
+    // Issue #23: pre-compiled regex patterns for emotional-word emphasis (avoids recompile per iteration)
+    private final Map<String, Pattern> emotionalWordPatterns = new ConcurrentHashMap<>();
+
+    // Language and voice mapping — default female (Standard-A) voice per language
     private static final Map<String, String> LANGUAGE_VOICE_MAP = new HashMap<>();
     static {
+        // South Indian
         LANGUAGE_VOICE_MAP.put("te", "te-IN-Standard-A"); // Telugu
         LANGUAGE_VOICE_MAP.put("ta", "ta-IN-Standard-A"); // Tamil
-        LANGUAGE_VOICE_MAP.put("hi", "hi-IN-Standard-A"); // Hindi
         LANGUAGE_VOICE_MAP.put("kn", "kn-IN-Standard-A"); // Kannada
         LANGUAGE_VOICE_MAP.put("ml", "ml-IN-Standard-A"); // Malayalam
+        // North / West Indian
+        LANGUAGE_VOICE_MAP.put("hi", "hi-IN-Standard-A"); // Hindi
+        LANGUAGE_VOICE_MAP.put("mr", "mr-IN-Standard-A"); // Marathi
+        LANGUAGE_VOICE_MAP.put("gu", "gu-IN-Standard-A"); // Gujarati
+        LANGUAGE_VOICE_MAP.put("pa", "pa-IN-Standard-A"); // Punjabi
+        LANGUAGE_VOICE_MAP.put("bn", "bn-IN-Standard-A"); // Bengali
+        LANGUAGE_VOICE_MAP.put("ur", "ur-IN-Standard-A"); // Urdu
+        // East Indian
+        LANGUAGE_VOICE_MAP.put("or", "or-IN-Standard-A"); // Odia
+        // International
         LANGUAGE_VOICE_MAP.put("en", "en-US-Standard-A"); // English
     }
 
@@ -150,20 +165,26 @@ public class TTSService {
 
         // Generate audio for each chunk
         List<byte[]> audioChunks = new ArrayList<>();
-        for (int i = 0; i < chunks.size(); i++) {
-            String chunk = chunks.get(i);
-            log.info("Processing chunk {}/{}: {} characters", i + 1, chunks.size(), chunk.length());
+        try {
+            for (int i = 0; i < chunks.size(); i++) {
+                String chunk = chunks.get(i);
+                log.info("Processing chunk {}/{}: {} characters", i + 1, chunks.size(), chunk.length());
 
-            String ssmlChunk = convertToSSML(chunk, language);
-            TTSResponse chunkResponse = generateAudioForText(ssmlChunk, language, voiceName);
+                String ssmlChunk = convertToSSML(chunk, language);
+                TTSResponse chunkResponse = generateAudioForText(ssmlChunk, language, voiceName);
 
-            if ("ERROR".equals(chunkResponse.getStatus())) {
-                return chunkResponse; // Return error if any chunk fails
+                if ("ERROR".equals(chunkResponse.getStatus())) {
+                    audioChunks.clear();
+                    return chunkResponse; // Return error if any chunk fails
+                }
+
+                // Decode base64 audio back to bytes
+                byte[] audioBytes = java.util.Base64.getDecoder().decode(chunkResponse.getAudioData());
+                audioChunks.add(audioBytes);
             }
-
-            // Decode base64 audio back to bytes
-            byte[] audioBytes = java.util.Base64.getDecoder().decode(chunkResponse.getAudioData());
-            audioChunks.add(audioBytes);
+        } catch (Exception e) {
+            audioChunks.clear();
+            throw e;
         }
 
         // Combine all audio chunks
@@ -205,9 +226,10 @@ public class TTSService {
     }
 
     private int findMp3HeaderEnd(byte[] audioData) {
-        // Simplified MP3 header detection
-        // Look for MP3 frame sync bytes (0xFF 0xFB or 0xFF 0xFA)
-        for (int i = 0; i < audioData.length - 1; i++) {
+        // MP3 frame sync bytes (0xFF 0xFB or 0xFF 0xFA) always appear near the start;
+        // Issue #24: limit scan to first 256 bytes to avoid O(n) traversal of full audio data
+        int scanLimit = Math.min(256, audioData.length - 1);
+        for (int i = 0; i < scanLimit; i++) {
             if ((audioData[i] & 0xFF) == 0xFF &&
                 ((audioData[i + 1] & 0xFF) == 0xFB || (audioData[i + 1] & 0xFF) == 0xFA)) {
                 return i;
@@ -217,15 +239,16 @@ public class TTSService {
     }
 
     private String getVoiceName(String language, String gender) {
-        // Telugu, Tamil, Hindi, Kannada, Malayalam: -A is female, -B is male
-        if ("te".equals(language) || "ta".equals(language) || "hi".equals(language) || "kn".equals(language) || "ml".equals(language)) {
+        // All Indian-locale languages: -A is female, -B is male (Standard voices)
+        // Covers: te, ta, kn, ml, hi, mr, gu, pa, bn, ur, or
+        if (LANGUAGE_VOICE_MAP.containsKey(language) && !"en".equals(language)) {
             if ("female".equalsIgnoreCase(gender)) {
                 return language + "-IN-Standard-A";
             } else {
                 return language + "-IN-Standard-B";
             }
         }
-        // English: -A is female, -B is male (US voices)
+        // English uses US locale
         if ("en".equals(language)) {
             if ("female".equalsIgnoreCase(gender)) {
                 return "en-US-Standard-A";
@@ -278,8 +301,10 @@ public class TTSService {
 
         for (String word : emotionalWords) {
             if (sentence.toLowerCase().contains(word.toLowerCase())) {
-                // Replace the word with emphasized version
-                sentence = sentence.replaceAll("(?i)" + word, "<emphasis level=\"strong\">" + word + "</emphasis>");
+                Pattern pattern = emotionalWordPatterns.computeIfAbsent(word,
+                        w -> Pattern.compile("(?i)" + Pattern.quote(w)));
+                sentence = pattern.matcher(sentence)
+                        .replaceAll("<emphasis level=\"strong\">" + word + "</emphasis>");
             }
         }
 
@@ -291,19 +316,35 @@ public class TTSService {
      */
     private String[] getEmotionalWords(String language) {
         switch (language) {
+            // South Indian
             case "te": // Telugu
-                return new String[]{"ప్రేమ", "ఆనందం", "దుఃఖం", "భయం", "కోపం", "ఆశ", "నిరాశ", "సంతోషం", "వేదన", "ఆనందం"};
+                return new String[]{"ప్రేమ", "ఆనందం", "దుఃఖం", "భయం", "కోపం", "ఆశ", "నిరాశ", "సంతోషం", "వేదన", "హృదయం"};
             case "ta": // Tamil
-                return new String[]{"காதல்", "மகிழ்ச்சி", "துக்கம்", "பயம்", "கோபம்", "நம்பிக்கை", "ஆசை", "சந்தோஷம்", "வேதனை", "மகிழ்ச்சி"};
-            case "hi": // Hindi
-                return new String[]{"प्यार", "खुशी", "दुख", "डर", "गुस्सा", "आशा", "निराशा", "सुख", "दर्द", "आनंद"};
+                return new String[]{"காதல்", "மகிழ்ச்சி", "துக்கம்", "பயம்", "கோபம்", "நம்பிக்கை", "ஆசை", "சந்தோஷம்", "வேதனை", "இதயம்"};
             case "kn": // Kannada
                 return new String[]{"ಪ್ರೀತಿ", "ಸಂತೋಷ", "ದುಃಖ", "ಭಯ", "ಕೋಪ", "ಆಶೆ", "ನಿರಾಶೆ", "ಸುಖ", "ನೋವು", "ಆನಂದ"};
             case "ml": // Malayalam
                 return new String[]{"പ്രണയം", "സന്തോഷം", "ദുഃഖം", "ഭയം", "കോപം", "ആശ", "നിരാശ", "സുഖം", "വേദന", "ആനന്ദം"};
-            case "en": // English
+            // North / West Indian
+            case "hi": // Hindi
+                return new String[]{"प्यार", "खुशी", "दुख", "डर", "गुस्सा", "आशा", "निराशा", "सुख", "दर्द", "आनंद"};
+            case "mr": // Marathi
+                return new String[]{"प्रेम", "आनंद", "दुःख", "भय", "राग", "आशा", "निराशा", "सुख", "वेदना", "हृदय"};
+            case "gu": // Gujarati
+                return new String[]{"પ્રેમ", "આનંદ", "દુઃખ", "ભય", "ક્રોધ", "આશા", "નિરાશા", "સુખ", "વ્યથા", "હૃદય"};
+            case "pa": // Punjabi
+                return new String[]{"ਪਿਆਰ", "ਖੁਸ਼ੀ", "ਦੁੱਖ", "ਡਰ", "ਗੁੱਸਾ", "ਆਸ", "ਨਿਰਾਸ਼ਾ", "ਸੁਖ", "ਦਰਦ", "ਦਿਲ"};
+            case "bn": // Bengali
+                return new String[]{"প্রেম", "আনন্দ", "দুঃখ", "ভয়", "রাগ", "আশা", "হতাশা", "সুখ", "ব্যথা", "হৃদয়"};
+            case "ur": // Urdu
+                return new String[]{"محبت", "خوشی", "غم", "خوف", "غصہ", "امید", "مایوسی", "سکون", "درد", "دل"};
+            // East Indian
+            case "or": // Odia
+                return new String[]{"ପ୍ରେମ", "ଆନନ୍ଦ", "ଦୁଃଖ", "ଭୟ", "ରାଗ", "ଆଶା", "ନିରାଶ", "ସୁଖ", "ଯନ୍ତ୍ରଣା", "ହୃଦୟ"};
+            // International
+            case "en":
             default:
-                return new String[]{"love", "happiness", "sadness", "fear", "anger", "hope", "despair", "joy", "pain", "happiness"};
+                return new String[]{"love", "happiness", "sadness", "fear", "anger", "hope", "despair", "joy", "pain", "heart"};
         }
     }
 }

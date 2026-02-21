@@ -8,10 +8,11 @@ import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class StoryProcessingService {
@@ -419,8 +420,11 @@ public class StoryProcessingService {
                 story.getUploadMetadata().get("ttsAudioData") == null) {
             try {
                 log.info("Story {} - Step 5: Audio generation ", story.getStoryId());
+                String gender = Optional.ofNullable(userService.getUserById(story.getUserId()).getGender())
+                        .map(Enum::name)
+                        .orElse("unknown");
                 TTSResponse ttsResponse = ttsService.generateAudio(story.getStoryRewriteResponse().getRewrittenText(),
-                        story.getLanguage(), userService.getUserById(story.getUserId()).getGender().toString());
+                        story.getLanguage(), gender);
 
                 // Check if TTS generation was successful
                 if (ttsResponse == null || "ERROR".equals(ttsResponse.getStatus()) ||
