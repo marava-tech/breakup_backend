@@ -1,0 +1,4 @@
+services:
+  breakup-backend:
+    mem_limit: 4g
+    cpus: '2.0'
