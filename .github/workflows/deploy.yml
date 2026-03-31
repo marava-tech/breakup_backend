@@ -20,6 +20,13 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
@@ -60,6 +67,6 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /root/server-setup/services/breakup-stories
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull breakup-backend
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps breakup-backend
+            docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml pull breakup-backend
+            docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d --no-deps breakup-backend
             docker image prune -f
