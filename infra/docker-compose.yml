@@ -1,0 +1,42 @@
+services:
+  breakup-backend:
+    image: ghcr.io/marava-tech/breakup-backend:latest
+    container_name: breakup-backend
+    pull_policy: always
+    restart: on-failure
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    ports:
+      - "9200:8080"
+    environment:
+      - SPRING_DATA_MONGODB_HOST=mongodb
+      - SPRING_DATA_MONGODB_PORT=27017
+      - SPRING_DATA_MONGODB_DATABASE=${MONGO_DATABASE:-breakup_stories}
+      - SPRING_DATA_MONGODB_USERNAME=${MONGO_ROOT_USERNAME}
+      - SPRING_DATA_MONGODB_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE=admin
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - BREAKUP_CLOUDINARY_CLOUD_NAME=${BREAKUP_CLOUDINARY_CLOUD_NAME}
+      - BREAKUP_CLOUDINARY_API_KEY=${BREAKUP_CLOUDINARY_API_KEY}
+      - BREAKUP_CLOUDINARY_API_SECRET=${BREAKUP_CLOUDINARY_API_SECRET}
+      - BREAKUP_MAIL_HOST=${BREAKUP_MAIL_HOST}
+      - BREAKUP_MAIL_PORT=${BREAKUP_MAIL_PORT}
+      - BREAKUP_MAIL_USERNAME=${BREAKUP_MAIL_USERNAME}
+      - BREAKUP_MAIL_PASSWORD=${BREAKUP_MAIL_PASSWORD}
+    networks:
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  database-network:
+    external: true
+    name: database-network
