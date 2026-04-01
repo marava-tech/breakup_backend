@@ -66,7 +66,8 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            cd /root/server-setup/services/breakup-stories
-            docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml pull breakup-backend
-            docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d --no-deps breakup-backend
+            cd /root/server-setup
+            docker compose -f services/breakup-stories/infra/docker-compose.yml -f services/breakup-stories/infra/docker-compose.prod.yml --env-file .env pull breakup-backend
+            docker rm -f breakup-backend 2>/dev/null || true
+            docker compose -f services/breakup-stories/infra/docker-compose.yml -f services/breakup-stories/infra/docker-compose.prod.yml --env-file .env up -d --no-deps breakup-backend
             docker image prune -f
