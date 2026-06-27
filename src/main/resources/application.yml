@@ -41,7 +41,7 @@ spring:
     host: ${BREAKUP_MAIL_HOST:smtp.gmail.com}
     port: ${BREAKUP_MAIL_PORT:587}
     username: ${BREAKUP_MAIL_USERNAME:marava.technologies@gmail.com}
-    password: ${BREAKUP_MAIL_PASSWORD:REDACTED_GMAIL_PASSWORD}
+    password: ${BREAKUP_MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -66,18 +66,14 @@ server:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:REDACTED_JWT_SECRET}
+  secret: ${JWT_SECRET}
   expiration: 2592000000 # 30 days in milliseconds
 
 
 # Admin Configuration
 admin:
   email: ${ADMIN_EMAIL:kinneramadhu123@gmail.com}
-  # Default secret if not provided in env. Consider rotating this or forcing env var in prod.
-  # This corresponds to "JBSWY3DPEHPK3PXP" or similar base32 secret.
-  # Using the generated one: 59cc4505b1378606 (hex) -> need to convert or just put one here.
-  # User prompt example: JBSWY3DPEHPK3PXP
-  totp-secret: ${ADMIN_TOTP_SECRET:REDACTED_TOTP_SECRET}
+  totp-secret: ${ADMIN_TOTP_SECRET}
 
 
 logging:
@@ -128,9 +124,9 @@ management:
 # Cloudinary Configuration for Breakup Stories
 app:
   cloudinary:
-    cloud-name: ${BREAKUP_CLOUDINARY_CLOUD_NAME:dhssmiyoc}
-    api-key: ${BREAKUP_CLOUDINARY_API_KEY:REDACTED_CLOUDINARY_KEY}
-    api-secret: ${BREAKUP_CLOUDINARY_API_SECRET:REDACTED_CLOUDINARY_SECRET}
+    cloud-name: ${BREAKUP_CLOUDINARY_CLOUD_NAME}
+    api-key: ${BREAKUP_CLOUDINARY_API_KEY}
+    api-secret: ${BREAKUP_CLOUDINARY_API_SECRET}
   story:
     view-dedup-ttl-seconds: ${VIEW_DEDUP_TTL_SECONDS:1800} # Default 30 minutes
 
@@ -153,7 +149,7 @@ google:
 # OpenAI Configuration for AI Processing
 openai:
   api:
-    key: ${OPENAI_API_KEY:REDACTED_OPENAI_KEY}
+    key: ${OPENAI_API_KEY}
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
     model: ${OPENAI_MODEL:gpt-4o}
     max-tokens: ${OPENAI_MAX_TOKENS:2048}
