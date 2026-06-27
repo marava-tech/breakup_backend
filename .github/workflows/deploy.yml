@@ -57,6 +57,6 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            docker compose -f /root/server-v2/services/breakup-backend/docker-compose.yml --env-file /root/server-v2/.env pull breakup-backend
-            docker compose -f /root/server-v2/services/breakup-backend/docker-compose.yml --env-file /root/server-v2/.env up -d --no-deps breakup-backend
+            docker compose -f /root/server/services/breakup-backend/docker-compose.yml --env-file /root/server/.env pull breakup-backend
+            docker compose -f /root/server/services/breakup-backend/docker-compose.yml --env-file /root/server/.env up -d --no-deps breakup-backend
             docker image prune -f

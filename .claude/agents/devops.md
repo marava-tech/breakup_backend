@@ -9,7 +9,7 @@ for Abhedyam and Breakup Stories on the shared Hostinger server.
 - User: root
 - Abhedyam path: /opt/abhedyam/
 - Breakup path: /opt/breakup/
-- Server setup: /root/server-setup/
+- Server setup: /root/server/
 
 ## All running containers
 | Container | Image | Port |
