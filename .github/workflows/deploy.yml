@@ -2,7 +2,7 @@ name: Deploy to Production
 
 on:
   push:
-    branches: [main, feat/add-claude-instructions]
+    branches: [main]
 
 permissions:
   contents: read
